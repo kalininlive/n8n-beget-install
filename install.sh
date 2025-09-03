@@ -7,6 +7,21 @@ if (( EUID != 0 )); then
   exit 1
 fi
 
+### Парсинг аргументов
+ENABLE_BASIC_AUTH=false
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --enable-basic-auth)
+      ENABLE_BASIC_AUTH=true
+      shift
+      ;;
+    *)
+      echo "Неизвестный аргумент: $1"
+      exit 1
+      ;;
+  esac
+done
+
 clear
 echo "🌐 Автоматическая установка n8n с GitHub"
 echo "----------------------------------------"
@@ -17,9 +32,13 @@ read -p "📧 Введите email для SSL-сертификата Let's Encry
 read -p "🔐 Введите пароль для базы данных Postgres: " POSTGRES_PASSWORD
 read -p "🤖 Введите Telegram Bot Token: " TG_BOT_TOKEN
 read -p "👤 Введите Telegram User ID (для уведомлений): " TG_USER_ID
-read -p "👤 Введите имя пользователя для доступа к n8n: " N8N_BASIC_AUTH_USER
-read -s -p "🔑 Введите пароль для доступа к n8n: " N8N_BASIC_AUTH_PASSWORD
-echo
+
+if [ "$ENABLE_BASIC_AUTH" = true ]; then
+  read -p "👤 Введите имя пользователя для доступа к n8n: " N8N_BASIC_AUTH_USER
+  read -s -p "🔑 Введите пароль для доступа к n8n: " N8N_BASIC_AUTH_PASSWORD
+  echo
+fi
+
 read -p "🗝️  Введите ключ шифрования для n8n (Enter для генерации): " N8N_ENCRYPTION_KEY
 
 if [ -z "$N8N_ENCRYPTION_KEY" ]; then
@@ -59,9 +78,14 @@ N8N_ENCRYPTION_KEY=$N8N_ENCRYPTION_KEY
 N8N_EXPRESS_TRUST_PROXY=true
 TG_BOT_TOKEN=$TG_BOT_TOKEN
 TG_USER_ID=$TG_USER_ID
+EOF
+
+if [ "$ENABLE_BASIC_AUTH" = true ]; then
+cat >> ".env" <<EOF
 N8N_BASIC_AUTH_USER=$N8N_BASIC_AUTH_USER
 N8N_BASIC_AUTH_PASSWORD=$N8N_BASIC_AUTH_PASSWORD
 EOF
+fi
 
 cat > "bot/.env" <<EOF
 TG_BOT_TOKEN=$TG_BOT_TOKEN
