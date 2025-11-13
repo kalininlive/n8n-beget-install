@@ -20,17 +20,77 @@ read -p "👤 Введите Telegram User ID (для уведомлений): "
 read -p "🗝️  Введите ключ шифрования для n8n (Enter для генерации): " N8N_ENCRYPTION_KEY
 
 if [ -z "${N8N_ENCRYPTION_KEY}" ]; then
+  if ! command -v openssl &>/dev/null; then
+    echo "📦 Устанавливаем openssl..."
+    apt-get update
+    apt-get install -y openssl
+  fi
   N8N_ENCRYPTION_KEY="$(openssl rand -hex 32)"
   echo "✅ Сгенерирован ключ шифрования: ${N8N_ENCRYPTION_KEY}"
 fi
 
-### 2. Установка Docker и Compose (минимум действий)
+### 2. Установка Docker 28.1.1 и Docker Compose (пин к стабильной версии)
 echo "📦 Проверка Docker..."
-if ! command -v docker &>/dev/null; then
-  curl -fsSL https://get.docker.com | sh
+
+NEED_INSTALL_DOCKER=1
+DOCKER_TARGET_VERSION="28.1.1"
+DOCKER_APT_VERSION="5:28.1.1-1~ubuntu.22.04~jammy"
+
+if command -v docker &>/dev/null; then
+  CURRENT_DOCKER_VERSION="$(docker version --format '{{.Server.Version}}' 2>/dev/null || echo "")"
+  if [[ "$CURRENT_DOCKER_VERSION" == "$DOCKER_TARGET_VERSION" ]]; then
+    echo "✅ Найден Docker версии ${CURRENT_DOCKER_VERSION}, переустановка не требуется"
+    NEED_INSTALL_DOCKER=0
+  else
+    echo "❗ Обнаружен Docker версии ${CURRENT_DOCKER_VERSION:-unknown}, будет установлена проверенная версия ${DOCKER_TARGET_VERSION}"
+    NEED_INSTALL_DOCKER=1
+  fi
 fi
 
-if ! command -v docker compose &>/dev/null; then
+if (( NEED_INSTALL_DOCKER == 1 )); then
+  echo "🐳 Устанавливаем Docker ${DOCKER_TARGET_VERSION}..."
+
+  # Удаляем всё, что может конфликтовать
+  apt-get remove -y docker docker.io docker-doc docker-compose \
+    docker-compose-plugin docker-ce docker-ce-cli containerd.io || true
+  apt-get autoremove -y || true
+
+  # Базовые пакеты
+  apt-get update
+  apt-get install -y ca-certificates curl gnupg
+
+  # Репозиторий Docker
+  install -m 0755 -d /etc/apt/keyrings
+  curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+    | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+
+  echo \
+    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+    https://download.docker.com/linux/ubuntu \
+    $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+    > /etc/apt/sources.list.d/docker.list
+
+  apt-get update
+
+  # Конкретная версия Docker, как на рабочем сервере
+  apt-get install -y \
+    docker-ce=${DOCKER_APT_VERSION} \
+    docker-ce-cli=${DOCKER_APT_VERSION} \
+    containerd.io \
+    docker-buildx-plugin \
+    docker-compose-plugin
+
+  # Фиксируем пакеты от автообновлений
+  apt-mark hold docker-ce docker-ce-cli containerd.io \
+    docker-buildx-plugin docker-compose-plugin
+
+  echo "✅ Docker установлен:"
+  docker version --format 'Client: {{.Client.Version}} (API {{.Client.APIVersion}}) / Server: {{.Server.Version}} (API {{.Server.APIVersion}})'
+fi
+
+# Проверяем наличие docker compose (плагин)
+if ! docker compose version &>/dev/null; then
+  echo "⚠️  docker compose плагин недоступен, ставим бинарный docker-compose v2.23.3..."
   curl -sSL https://github.com/docker/compose/releases/download/v2.23.3/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose
   chmod +x /usr/local/bin/docker-compose
   ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose || true
@@ -53,7 +113,7 @@ TG_BOT_TOKEN=${TG_BOT_TOKEN}
 TG_USER_ID=${TG_USER_ID}
 EOF
 
-# .env бота (как у тебя)
+# .env бота
 mkdir -p bot
 cat > "bot/.env" <<EOF
 TG_BOT_TOKEN=${TG_BOT_TOKEN}
@@ -84,7 +144,7 @@ curl -skI "https://${DOMAIN}" >/dev/null || true
 
 ### 6.2 Ожидаем выпуск сертификата (проверяем логи Traefik до 90 сек)
 echo "⌛ Ждём выпуск сертификата Let’s Encrypt (до 90 сек)..."
-DEADLINE=$(( $(date +%s) + 90 ))
+DEADLINE=$(( "$(date +%s)" + 90 ))
 CERT_OK=0
 while [ "$(date +%s)" -lt "$DEADLINE" ]; do
   if docker logs n8n-traefik 2>&1 | grep -Eiq 'obtained|certificate.+(added|renewed|generated)'; then
@@ -95,7 +155,7 @@ while [ "$(date +%s)" -lt "$DEADLINE" ]; do
 done
 
 ### 6.3 Финальная проверка HTTPS/issuer
-HTTP_REDIRECT="$(curl -sI "http://${DOMAIN}" | tr -d '\r')"
+HTTP_REDIRECT="$(curl -sI "http://${DOMAIN}" | tr -d '\r' || true)"
 ISSUER="$(openssl s_client -connect "${DOMAIN}:443" -servername "${DOMAIN}" -showcerts </dev/null 2>/dev/null | openssl x509 -noout -issuer || true)"
 
 if echo "$HTTP_REDIRECT" | grep -qE '^HTTP/.* 308|^Location: https://'; then
@@ -118,7 +178,6 @@ fi
 echo "🔧 Устанавливаем cron-задачу на 02:00 каждый день"
 chmod +x /opt/n8n-install/backup_n8n.sh
 
-# безопасное добавление задания при set -e / pipefail
 ( crontab -l 2>/dev/null || true; \
   echo "0 2 * * * /bin/bash /opt/n8n-install/backup_n8n.sh >> /opt/n8n-install/logs/backup.log 2>&1" \
 ) | crontab -
