@@ -126,15 +126,7 @@ docker compose up -d n8n
 
 ## ОЧИСТКА СЕРВЕРА ПОСЛЕ ОБНОВЛЕНИЯ N8N
 
-[СМОТРЕТЬ ТУТ](https://www.notion.so/idirectsmm/N8N-21e6b62f009680ba8bd9e7c325a9f21b)
-
-
-**ДЛЯ ТЕХ КТО УСТАНОВИЛ СКРИПТ ДО 01.08.25**
-
-Команда для терминала, обновить бота: 
 ```bash
-curl -s https://raw.githubusercontent.com/kalininlive/n8n-beget-install/main/bot/bot.js -o /opt/n8n-install/bot/bot.js \
-&& docker cp /opt/n8n-install/bot/bot.js n8n-bot:/app/bot.js \
-&& docker restart n8n-bot
+docker image prune -f && docker system prune -f && truncate -s 0 /var/lib/docker/containers/*/*-json.log && find /tmp -type f -mtime +3 -delete
 ```
 👆 Просто вставляем в терминал
