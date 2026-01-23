@@ -1,30 +1,45 @@
-FROM n8nio/n8n:2.5.0-debian
+FROM node:20-alpine
 
 USER root
 
-# Debian-пакеты (ffmpeg, python, build tools)
-RUN apt-get update && apt-get install -y \
-  ffmpeg \
-  python3 \
-  python3-pip \
-  git \
-  curl \
+# Системные пакеты
+RUN apk add --no-cache --update \
   bash \
-  build-essential \
-  ca-certificates \
+  curl \
+  git \
+  make \
+  g++ \
+  gcc \
+  python3 \
+  py3-pip \
+  libffi-dev \
+  ffmpeg \
   apache2-utils \
-  && rm -rf /var/lib/apt/lists/*
+  docker-cli \
+  shadow
 
-# npm-глобалки (КАК У ТЕБЯ БЫЛО, БЕЗ ЛОМАЮЩИХ 2.x)
-RUN npm install -g \
-  fs-extra \
-  path \
+# yt-dlp
+RUN pip3 install yt-dlp --break-system-packages
+
+# Docker group
+ARG DOCKER_GID=999
+RUN groupadd -g ${DOCKER_GID} docker || groupadd docker || true && \
+    usermod -aG docker node
+
+# n8n
+RUN npm install -g n8n@2.5.0
+
+# npm пакеты (ТОЧНО ТВОЙ СПИСОК)
+RUN npm config set fund false && npm config set audit false && \
+npm install -g \
   axios \
   node-fetch \
   form-data \
   moment \
   date-fns \
   lodash \
+  fs-extra \
+  path \
   csv-parser \
   xml2js \
   js-yaml \
@@ -33,15 +48,29 @@ RUN npm install -g \
   simple-oauth2 \
   uuid \
   openai \
+  @tensorflow/tfjs-node \
+  langchain \
   node-telegram-bot-api \
+  discord.js \
   vk-io \
+  whatsapp-web.js \
+  fluent-ffmpeg \
+  ffmpeg-static \
+  google-tts-api \
+  @vitalets/google-translate-token \
+  node-wav \
+  mongoose \
+  ioredis \
   bcrypt \
   validator \
   joi \
   winston \
   dotenv \
+  prom-client \
+  node-downloader-helper \
   adm-zip \
   archiver \
   oauth-1.0a
 
 USER node
+ENTRYPOINT ["n8n"]
