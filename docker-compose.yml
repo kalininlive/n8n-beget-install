@@ -67,11 +67,11 @@ services:
       - n8n-postgres
       - n8n-redis
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.n8n.rule=Host(`${DOMAIN}`)"
-      - "traefik.http.routers.n8n.entrypoints=websecure"
-      - "traefik.http.routers.n8n.tls.certresolver=myresolver"
-      - "traefik.http.services.n8n.loadbalancer.server.port=5678"
+    - "traefik.enable=true"
+    - "traefik.http.routers.n8n.rule=Host(`{{DOMAIN}}`)"
+    - "traefik.http.routers.n8n.entrypoints=websecure"
+    - "traefik.http.routers.n8n.tls.certresolver=myresolver"
+    - "traefik.http.services.n8n.loadbalancer.server.port=5678"
 
   n8n-worker:
     build:
@@ -149,26 +149,28 @@ services:
       - redis_data:/data
 
   n8n-traefik:
-    image: traefik:3.0
-    container_name: n8n-traefik
-    restart: always
-    command:
-      - "--api.insecure=true"
-      - "--providers.docker=true"
-      - "--providers.docker.endpoint=unix:///var/run/docker.sock"
-      - "--providers.docker.exposedbydefault=false"
-      - "--providers.docker.network=n8n-install_default"
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.websecure.address=:443"
-      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
-      - "--certificatesresolvers.myresolver.acme.email=${EMAIL}"
-      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./letsencrypt:/letsencrypt
+   image: traefik:2.10.4
+   container_name: n8n-traefik
+   restart: always
+   command:
+    - "--api.insecure=true"
+    - "--providers.docker=true"
+    - "--providers.docker.exposedbydefault=false"
+    - "--providers.docker.network=n8n-install_default"
+    - "--entrypoints.web.address=:80"
+    - "--entrypoints.websecure.address=:443"
+    - "--certificatesResolvers.myresolver.acme.httpChallenge.entryPoint=web"
+    - "--certificatesResolvers.myresolver.acme.email={{EMAIL}}"
+    - "--certificatesResolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    - "--providers.file.directory=/etc/traefik/dynamic"
+    - "--providers.file.watch=true"
+  ports:
+    - "80:80"
+    - "443:443"
+  volumes:
+    - /var/run/docker.sock:/var/run/docker.sock:ro
+    - ./letsencrypt:/letsencrypt
+    - ./traefik_dynamic:/etc/traefik/dynamic
 
 volumes:
   n8n_data:
