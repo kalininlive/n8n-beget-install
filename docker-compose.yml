@@ -1,176 +1,116 @@
-version: "3.9"
-
 services:
   n8n:
     build:
       context: .
       dockerfile: Dockerfile.n8n
-      args:
-        DOCKER_GID: ${DOCKER_GID:-999}
-    container_name: n8n-app
+    container_name: n8n
     restart: always
-    user: "0:0"
     environment:
       - DB_TYPE=postgresdb
-      - DB_POSTGRESDB_HOST=n8n-postgres
+      - DB_POSTGRESDB_HOST=postgres
       - DB_POSTGRESDB_PORT=5432
       - DB_POSTGRESDB_DATABASE=n8n
       - DB_POSTGRESDB_USER=n8n
       - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
 
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
       - N8N_BASE_URL=https://${DOMAIN}
       - WEBHOOK_URL=https://${DOMAIN}/
 
-      - N8N_EXPRESS_TRUST_PROXY=true
-      - N8N_TRUSTED_PROXIES=*
-      - N8N_PROXY_HOPS=1
-
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
-
-      - GENERIC_TIMEZONE=Asia/Yekaterinburg
-      - NODE_ENV=production
-
-      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
-
-      # ⚠️ В v2.5.0 НЕ НУЖЕН, но оставляем совместимость
-      - N8N_RUNNERS_TASK_TIMEOUT=1800
-
-      - EXECUTIONS_TIMEOUT=-1
-      - EXECUTIONS_TIMEOUT_MAX=14400
-
-      - N8N_PAYLOAD_SIZE_MAX=512
-      - N8N_FORMDATA_FILE_SIZE_MAX=2048
-
-      - NODES_EXCLUDE=[]
-      - N8N_RESTRICT_FILE_ACCESS_TO=/data
-      - N8N_COMMUNITY_PACKAGES_ENABLED=true
-
       - EXECUTIONS_MODE=queue
-      - QUEUE_BULL_REDIS_HOST=n8n-redis
+      - QUEUE_BULL_REDIS_HOST=redis
       - QUEUE_BULL_REDIS_PORT=6379
 
-      - N8N_BINARY_DATA_MODE=filesystem
-      - N8N_DEFAULT_BINARY_DATA_MODE=filesystem
+      - NODE_ENV=production
+      - GENERIC_TIMEZONE=Europe/Moscow
 
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
       - n8n_data:/home/node/.n8n
       - ./data:/data
-      - ./backups:/opt/n8n-install/backups
-      - ./backup_n8n.sh:/opt/n8n-install/backup_n8n.sh
-      - ./update_n8n.sh:/opt/n8n-install/update_n8n.sh
-      - ./.env:/opt/n8n-install/.env
-      - ./shims:/opt/shims:ro
-    group_add:
-      - "999"
-    depends_on:
-      - n8n-postgres
-      - n8n-redis
-    labels:
-    - "traefik.enable=true"
-    - "traefik.http.routers.n8n.rule=Host(`{{DOMAIN}}`)"
-    - "traefik.http.routers.n8n.entrypoints=websecure"
-    - "traefik.http.routers.n8n.tls.certresolver=myresolver"
-    - "traefik.http.services.n8n.loadbalancer.server.port=5678"
 
-  n8n-worker:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.n8n.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.n8n.entrypoints=websecure"
+      - "traefik.http.routers.n8n.tls.certresolver=letsencrypt"
+      - "traefik.http.services.n8n.loadbalancer.server.port=5678"
+
+    depends_on:
+      - postgres
+      - redis
+
+  worker:
     build:
       context: .
       dockerfile: Dockerfile.n8n
-      args:
-        DOCKER_GID: ${DOCKER_GID:-999}
     container_name: n8n-worker
     restart: always
-    user: "0:0"
     command: worker
     environment:
       - DB_TYPE=postgresdb
-      - DB_POSTGRESDB_HOST=n8n-postgres
+      - DB_POSTGRESDB_HOST=postgres
       - DB_POSTGRESDB_PORT=5432
       - DB_POSTGRESDB_DATABASE=n8n
       - DB_POSTGRESDB_USER=n8n
       - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
-
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
-      - NODE_ENV=production
-      - GENERIC_TIMEZONE=Asia/Yekaterinburg
-
-      - EXECUTIONS_TIMEOUT=-1
-      - EXECUTIONS_TIMEOUT_MAX=14400
-
-      - NODES_EXCLUDE=[]
-      - N8N_RESTRICT_FILE_ACCESS_TO=/data
 
       - EXECUTIONS_MODE=queue
-      - QUEUE_BULL_REDIS_HOST=n8n-redis
+      - QUEUE_BULL_REDIS_HOST=redis
       - QUEUE_BULL_REDIS_PORT=6379
 
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
       - n8n_data:/home/node/.n8n
       - ./data:/data
-      - ./.env:/opt/n8n-install/.env
-      - ./shims:/opt/shims:ro
-    group_add:
-      - "999"
-    depends_on:
-      - n8n-postgres
-      - n8n-redis
 
-  n8n-bot:
-    build:
-      context: ./bot
-      dockerfile: Dockerfile
-    container_name: n8n-bot
-    restart: always
-    env_file:
-      - ./bot/.env
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
-      - n8n
+      - postgres
+      - redis
 
-  n8n-postgres:
+  postgres:
     image: postgres:15-alpine
     container_name: n8n-postgres
     restart: always
     environment:
-      - POSTGRES_USER=n8n
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=n8n
+      POSTGRES_DB: n8n
+      POSTGRES_USER: n8n
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  n8n-redis:
+  redis:
     image: redis:7-alpine
     container_name: n8n-redis
     restart: always
     volumes:
       - redis_data:/data
 
-  n8n-traefik:
-   image: traefik:2.10.4
-   container_name: n8n-traefik
-   restart: always
-   command:
-    - "--api.insecure=true"
-    - "--providers.docker=true"
-    - "--providers.docker.exposedbydefault=false"
-    - "--providers.docker.network=n8n-install_default"
-    - "--entrypoints.web.address=:80"
-    - "--entrypoints.websecure.address=:443"
-    - "--certificatesResolvers.myresolver.acme.httpChallenge.entryPoint=web"
-    - "--certificatesResolvers.myresolver.acme.email={{EMAIL}}"
-    - "--certificatesResolvers.myresolver.acme.storage=/letsencrypt/acme.json"
-    - "--providers.file.directory=/etc/traefik/dynamic"
-    - "--providers.file.watch=true"
-  ports:
-    - "80:80"
-    - "443:443"
-  volumes:
-    - /var/run/docker.sock:/var/run/docker.sock:ro
-    - ./letsencrypt:/letsencrypt
-    - ./traefik_dynamic:/etc/traefik/dynamic
+  bot:
+    build: ./bot
+    container_name: n8n-bot
+    restart: always
+    env_file:
+      - ./bot/.env
+
+  traefik:
+    image: traefik:2.10
+    container_name: traefik
+    restart: always
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencrypt.acme.email=${EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./letsencrypt:/letsencrypt
 
 volumes:
   n8n_data:
