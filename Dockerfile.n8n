@@ -2,8 +2,7 @@ FROM node:20-alpine
 
 USER root
 
-# Системные пакеты
-RUN apk add --no-cache --update \
+RUN apk add --no-cache \
   bash \
   curl \
   git \
@@ -14,24 +13,16 @@ RUN apk add --no-cache --update \
   py3-pip \
   libffi-dev \
   ffmpeg \
-  apache2-utils \
-  docker-cli \
-  shadow
+  apache2-utils
 
-# yt-dlp
 RUN pip3 install yt-dlp --break-system-packages
 
-# Docker group
 ARG DOCKER_GID=999
-RUN groupadd -g ${DOCKER_GID} docker || groupadd docker || true && \
-    usermod -aG docker node
+RUN addgroup -g ${DOCKER_GID} docker || true && adduser node docker || true
 
-# n8n
-RUN npm install -g n8n@2.5.0
+RUN npm config set fund false && npm config set audit false
 
-# npm пакеты (ТОЧНО ТВОЙ СПИСОК)
-RUN npm config set fund false && npm config set audit false && \
-npm install -g \
+RUN npm install -g n8n@2.5.0 \
   axios \
   node-fetch \
   form-data \
@@ -39,7 +30,6 @@ npm install -g \
   date-fns \
   lodash \
   fs-extra \
-  path \
   csv-parser \
   xml2js \
   js-yaml \
@@ -48,29 +38,10 @@ npm install -g \
   simple-oauth2 \
   uuid \
   openai \
-  @tensorflow/tfjs-node \
   langchain \
-  node-telegram-bot-api \
-  discord.js \
-  vk-io \
-  whatsapp-web.js \
   fluent-ffmpeg \
-  ffmpeg-static \
-  google-tts-api \
-  @vitalets/google-translate-token \
-  node-wav \
-  mongoose \
-  ioredis \
-  bcrypt \
-  validator \
-  joi \
-  winston \
-  dotenv \
-  prom-client \
-  node-downloader-helper \
-  adm-zip \
-  archiver \
   oauth-1.0a
 
 USER node
+
 ENTRYPOINT ["n8n"]
