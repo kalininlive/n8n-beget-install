@@ -1,4 +1,4 @@
-FROM node:20-alpine
+FROM n8nio/n8n:2.5.0
 
 USER root
 
@@ -13,16 +13,14 @@ RUN apk add --no-cache \
   py3-pip \
   libffi-dev \
   ffmpeg \
-  apache2-utils
+  apache2-utils \
+  docker-cli
 
 RUN pip3 install yt-dlp --break-system-packages
 
-ARG DOCKER_GID=999
-RUN addgroup -g ${DOCKER_GID} docker || true && adduser node docker || true
-
 RUN npm config set fund false && npm config set audit false
 
-RUN npm install -g n8n@2.5.0 \
+RUN npm install -g \
   axios \
   node-fetch \
   form-data \
@@ -30,6 +28,7 @@ RUN npm install -g n8n@2.5.0 \
   date-fns \
   lodash \
   fs-extra \
+  path \
   csv-parser \
   xml2js \
   js-yaml \
@@ -39,9 +38,9 @@ RUN npm install -g n8n@2.5.0 \
   uuid \
   openai \
   langchain \
+  node-telegram-bot-api \
   fluent-ffmpeg \
+  ffmpeg-static \
   oauth-1.0a
 
 USER node
-
-ENTRYPOINT ["n8n"]
