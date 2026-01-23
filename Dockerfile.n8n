@@ -2,6 +2,7 @@ FROM n8nio/n8n:2.5.0
 
 USER root
 
+# === System dependencies ===
 RUN apk add --no-cache \
   bash \
   curl \
@@ -13,13 +14,16 @@ RUN apk add --no-cache \
   py3-pip \
   libffi-dev \
   ffmpeg \
-  apache2-utils \
-  docker-cli
+  apache2-utils
 
-RUN pip3 install yt-dlp --break-system-packages
+# === Python tools (yt-dlp etc) ===
+RUN pip3 install --no-cache-dir yt-dlp --break-system-packages
 
-RUN npm config set fund false && npm config set audit false
+# === npm config ===
+RUN npm config set fund false \
+ && npm config set audit false
 
+# === Node global libraries ===
 RUN npm install -g \
   axios \
   node-fetch \
@@ -28,7 +32,6 @@ RUN npm install -g \
   date-fns \
   lodash \
   fs-extra \
-  path \
   csv-parser \
   xml2js \
   js-yaml \
