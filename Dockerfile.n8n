@@ -1,88 +1,12 @@
-FROM n8nio/n8n:1.123.6
+FROM n8nio/n8n:2.5.0
 
 USER root
 
-# Alpine репозитории + апдейт
-RUN set -eux; \
-  printf '%s\n' \
-    "https://dl-cdn.alpinelinux.org/alpine/v3.22/main" \
-    "https://dl-cdn.alpinelinux.org/alpine/v3.22/community" \
-  > /etc/apk/repositories; \
-  apk update; \
-  apk upgrade --no-cache
+# Оставляем ТОЛЬКО пакеты для работы с файлами/путями,
+# чтобы не ломать Code-ноды и runners
+RUN npm install -g fs-extra path
 
-# Системные пакеты (ffmpeg включён) + docker-cli для docker logs внутри контейнера
-RUN apk add --no-cache \
-  bash \
-  curl \
-  git \
-  make \
-  g++ \
-  gcc \
-  python3 \
-  py3-pip \
-  libffi-dev \
-  yt-dlp \
-  apache2-utils \
-  ffmpeg 
-
-# ДОБАВЛЕНО: docker-cli для docker logs внутри контейнера
-RUN apk add --no-cache docker-cli
-
-# (опционально) Создать группу docker и добавить пользователя node
-ARG DOCKER_GID=999
-RUN set -eux; \
-  addgroup -S -g ${DOCKER_GID} docker || addgroup -S docker; \
-  adduser node docker || true
-
-# Чуть ускорим npm
-RUN npm config set fund false && npm config set audit false
-
-# npm-глобалки (оставляем все как у тебя было)
-RUN for pkg in \
-    axios \
-    node-fetch \
-    form-data \
-    moment \
-    date-fns \
-    lodash \
-    fs-extra \
-    path \
-    csv-parser \
-    xml2js \
-    js-yaml \
-    xlsx \
-    jsonwebtoken \
-    simple-oauth2 \
-    uuid \
-    openai \
-    @tensorflow/tfjs-node \
-    langchain \
-    node-telegram-bot-api \
-    discord.js \
-    vk-io \
-    whatsapp-web.js \
-    fluent-ffmpeg \
-    ffmpeg-static \
-    google-tts-api \
-    @vitalets/google-translate-token \
-    node-wav \
-    mongoose \
-    ioredis \
-    bcrypt \
-    validator \
-    joi \
-    winston \
-    dotenv \
-    prom-client \
-    node-downloader-helper \
-    adm-zip \
-    archiver \
-  ; do \
-    echo "🔧 Устанавливаем $pkg..." && npm install -g "$pkg" || echo "⚠️ Не удалось установить $pkg, продолжаем..."; \
-  done
-
-# Локально — для доступности в Code-нодах
+# Нужен для старых интеграций
 RUN npm install oauth-1.0a
 
 USER node
