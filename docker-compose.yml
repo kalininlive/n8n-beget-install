@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
   n8n:
     build:
@@ -8,8 +10,6 @@ services:
     container_name: n8n-app
     restart: always
     user: "0:0"
-    ports:
-      - "5678:5678"
     environment:
       - DB_TYPE=postgresdb
       - DB_POSTGRESDB_HOST=n8n-postgres
@@ -23,7 +23,7 @@ services:
 
       - N8N_EXPRESS_TRUST_PROXY=true
       - N8N_TRUSTED_PROXIES=*
-      - N8N_PROXY_HOPS=${N8N_PROXY_HOPS}
+      - N8N_PROXY_HOPS=1
 
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
 
@@ -31,7 +31,8 @@ services:
       - NODE_ENV=production
 
       - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
-      - N8N_RUNNERS_ENABLED=true
+
+      # ⚠️ В v2.5.0 НЕ НУЖЕН, но оставляем совместимость
       - N8N_RUNNERS_TASK_TIMEOUT=1800
 
       - EXECUTIONS_TIMEOUT=-1
@@ -44,27 +45,20 @@ services:
       - N8N_RESTRICT_FILE_ACCESS_TO=/data
       - N8N_COMMUNITY_PACKAGES_ENABLED=true
 
-      - HTTP_PROXY=${PROXY_URL}
-      - HTTPS_PROXY=${PROXY_URL}
-      - NO_PROXY=${NO_PROXY}
-
       - EXECUTIONS_MODE=queue
       - QUEUE_BULL_REDIS_HOST=n8n-redis
       - QUEUE_BULL_REDIS_PORT=6379
-
-      - PATH=/opt/shims:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
       - N8N_BINARY_DATA_MODE=filesystem
       - N8N_DEFAULT_BINARY_DATA_MODE=filesystem
 
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /usr/bin/docker:/usr/bin/docker:ro
       - n8n_data:/home/node/.n8n
       - ./data:/data
+      - ./backups:/opt/n8n-install/backups
       - ./backup_n8n.sh:/opt/n8n-install/backup_n8n.sh
       - ./update_n8n.sh:/opt/n8n-install/update_n8n.sh
-      - ./backups:/opt/n8n-install/backups
       - ./.env:/opt/n8n-install/.env
       - ./shims:/opt/shims:ro
     group_add:
@@ -96,13 +90,10 @@ services:
       - DB_POSTGRESDB_DATABASE=n8n
       - DB_POSTGRESDB_USER=n8n
       - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
 
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
       - NODE_ENV=production
       - GENERIC_TIMEZONE=Asia/Yekaterinburg
-
-      - N8N_RUNNERS_ENABLED=true
-      - N8N_RUNNERS_TASK_TIMEOUT=1800
 
       - EXECUTIONS_TIMEOUT=-1
       - EXECUTIONS_TIMEOUT_MAX=14400
@@ -116,7 +107,6 @@ services:
 
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /usr/bin/docker:/usr/bin/docker:ro
       - n8n_data:/home/node/.n8n
       - ./data:/data
       - ./.env:/opt/n8n-install/.env
@@ -159,19 +149,20 @@ services:
       - redis_data:/data
 
   n8n-traefik:
-    image: traefik:2.10.4
+    image: traefik:3.0
     container_name: n8n-traefik
     restart: always
     command:
       - "--api.insecure=true"
       - "--providers.docker=true"
+      - "--providers.docker.endpoint=unix:///var/run/docker.sock"
       - "--providers.docker.exposedbydefault=false"
       - "--providers.docker.network=n8n-install_default"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
-      - "--certificatesResolvers.myresolver.acme.httpChallenge.entryPoint=web"
-      - "--certificatesResolvers.myresolver.acme.email=${EMAIL}"
-      - "--certificatesResolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.myresolver.acme.email=${EMAIL}"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
     ports:
       - "80:80"
       - "443:443"
