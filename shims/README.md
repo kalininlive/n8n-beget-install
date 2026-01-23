@@ -20,3 +20,8 @@
 apt update
 apt install -y ffmpeg python3 python3-pip
 pip3 install yt-dlp
+```
+После этого:
+```bash
+chmod +x shims/*
+```
