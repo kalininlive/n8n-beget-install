@@ -1,124 +1,101 @@
 #!/bin/bash
 set -e
 
-# ==========================================================
-# CLEAN INSTALL SCRIPT FOR n8n 2.x (QUEUE MODE, RUNNERS)
-# ==========================================================
-
-if (( EUID != 0 )); then
-  echo "❗ Запусти скрипт от root"
+### Проверка root
+if [[ "$EUID" -ne 0 ]]; then
+  echo "❌ Запусти от root: sudo bash install.sh"
   exit 1
 fi
 
 clear
-echo "🌐 Чистая установка n8n (2.x, queue mode)"
-echo "----------------------------------------"
+echo "🚀 Установка n8n 2.5.0 (CLEAN INSTALL, REFERENCE MODE)"
+echo "==================================================="
 
-# ===== INPUT =====
-read -p "🌐 Домен для n8n (например n8n.example.com): " DOMAIN
+### 1. Ввод данных
+read -p "🌐 Домен (например n8n.example.com): " DOMAIN
 read -p "📧 Email для Let's Encrypt: " EMAIL
 read -p "🔐 Пароль Postgres: " POSTGRES_PASSWORD
 read -p "🤖 Telegram Bot Token: " TG_BOT_TOKEN
 read -p "👤 Telegram User ID: " TG_USER_ID
-read -p "🗝️  Ключ шифрования n8n (Enter — сгенерировать): " N8N_ENCRYPTION_KEY
 
-if [ -z "$N8N_ENCRYPTION_KEY" ]; then
+read -p "🗝️  N8N Encryption Key (Enter = сгенерировать): " N8N_ENCRYPTION_KEY
+if [[ -z "$N8N_ENCRYPTION_KEY" ]]; then
   N8N_ENCRYPTION_KEY=$(openssl rand -hex 32)
   echo "✅ Сгенерирован ключ: $N8N_ENCRYPTION_KEY"
 fi
 
-# ===== DOCKER =====
+### 2. Docker
 echo "📦 Установка Docker + docker compose plugin"
-
-apt-get update
-apt-get install -y ca-certificates curl gnupg lsb-release
-
-if ! command -v docker &>/dev/null; then
-  curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
-    | gpg --dearmor -o /usr/share/keyrings/docker.gpg
-
-  echo \
-    "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker.gpg] \
-    https://download.docker.com/linux/ubuntu \
-    $(lsb_release -cs) stable" \
-    > /etc/apt/sources.list.d/docker.list
-
-  apt-get update
-  apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+if ! command -v docker >/dev/null 2>&1; then
+  curl -fsSL https://get.docker.com | sh
 fi
 
-docker --version
-docker compose version
+if ! docker compose version >/dev/null 2>&1; then
+  apt-get update
+  apt-get install -y docker-compose-plugin
+fi
 
-# ===== CLONE =====
+systemctl enable docker
+systemctl start docker
+
+### 3. Клонирование репозитория
+INSTALL_DIR="/opt/n8n-install"
 echo "📥 Клонируем репозиторий"
-rm -rf /opt/n8n-install
-git clone https://github.com/kalininlive/n8n-beget-install.git /opt/n8n-install
-cd /opt/n8n-install
+rm -rf $INSTALL_DIR
+git clone https://github.com/kalininlive/n8n-beget-install.git $INSTALL_DIR
+cd $INSTALL_DIR
 
-# ===== DIRECTORIES =====
+### 4. Директории
 echo "📂 Создаём директории"
-mkdir -p data logs backups shims letsencrypt traefik_dynamic
-touch logs/backup.log
-chmod 600 logs/backup.log
-chown -R 1000:1000 logs backups
+mkdir -p data backups logs letsencrypt
+chmod -R 755 data backups logs letsencrypt
 
-# ===== ENV =====
+### 5. .env
 echo "🧾 Генерируем .env"
-
 cat > .env <<EOF
-DOMAIN=${DOMAIN}
-EMAIL=${EMAIL}
+DOMAIN=$DOMAIN
+EMAIL=$EMAIL
+POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+N8N_ENCRYPTION_KEY=$N8N_ENCRYPTION_KEY
 
-POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
-
-# Proxy / trust
-N8N_EXPRESS_TRUST_PROXY=true
-N8N_TRUSTED_PROXIES=*
 N8N_PROXY_HOPS=1
-
-# Queue mode
 EXECUTIONS_MODE=queue
 QUEUE_BULL_REDIS_HOST=n8n-redis
 QUEUE_BULL_REDIS_PORT=6379
 
-# Binary data
 N8N_BINARY_DATA_MODE=filesystem
 N8N_DEFAULT_BINARY_DATA_MODE=filesystem
-
-# Telegram
-TG_BOT_TOKEN=${TG_BOT_TOKEN}
-TG_USER_ID=${TG_USER_ID}
 EOF
 
 chmod 600 .env
 
+### 6. bot/.env
+echo "🤖 Настраиваем Telegram-бота"
 cat > bot/.env <<EOF
-TG_BOT_TOKEN=${TG_BOT_TOKEN}
-TG_USER_ID=${TG_USER_ID}
+TG_BOT_TOKEN=$TG_BOT_TOKEN
+TG_USER_ID=$TG_USER_ID
 EOF
-
 chmod 600 bot/.env
 
-# ===== BUILD & RUN =====
-echo "🚀 Сборка и запуск контейнеров"
+### 7. Права (КРИТИЧНО ДЛЯ v2)
+echo "🔧 Исправляем права"
+chown -R 1000:1000 data backups logs || true
+
+### 8. Запуск
+echo "🚀 Сборка и запуск контейнеров (это может занять 5–10 минут)"
 docker compose build
 docker compose up -d
 
-# ===== CRON =====
-echo "⏱️ Настройка ежедневных бэкапов (02:00)"
-chmod +x backup_n8n.sh
-(crontab -l 2>/dev/null; echo "0 2 * * * /bin/bash /opt/n8n-install/backup_n8n.sh >> /opt/n8n-install/logs/backup.log 2>&1") | crontab -
+### 9. Проверка
+echo "⏳ Ждём старт (20 сек)..."
+sleep 20
 
-# ===== TELEGRAM =====
-curl -s -X POST https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage \
-  -d chat_id=${TG_USER_ID} \
-  -d text="✅ n8n установлен и запущен: https://${DOMAIN}"
+echo "📦 Контейнеры:"
+docker ps
 
-# ===== DONE =====
-echo
-echo "🎉 Установка завершена"
-echo "🌐 https://${DOMAIN}"
-echo
-docker ps --format "table {{.Names}}\t{{.Status}}"
+### 10. Финал
+echo "==================================================="
+echo "✅ УСТАНОВКА ЗАВЕРШЕНА"
+echo "🌐 n8n: https://$DOMAIN"
+echo "🤖 Telegram-бот подключён"
+echo "==================================================="
