@@ -3,114 +3,172 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.n8n
-    container_name: n8n
+    container_name: n8n-app
     restart: always
+    user: "0:0"
+
     environment:
-      - DB_TYPE=postgresdb
-      - DB_POSTGRESDB_HOST=postgres
-      - DB_POSTGRESDB_PORT=5432
-      - DB_POSTGRESDB_DATABASE=n8n
-      - DB_POSTGRESDB_USER=n8n
-      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
+      DB_TYPE=postgresdb
+      DB_POSTGRESDB_HOST=n8n-postgres
+      DB_POSTGRESDB_PORT=5432
+      DB_POSTGRESDB_DATABASE=n8n
+      DB_POSTGRESDB_USER=n8n
+      DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
 
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
-      - N8N_BASE_URL=https://${DOMAIN}
-      - WEBHOOK_URL=https://${DOMAIN}/
+      N8N_BASE_URL=https://${DOMAIN}
+      WEBHOOK_URL=https://${DOMAIN}/
+      N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
 
-      - EXECUTIONS_MODE=queue
-      - QUEUE_BULL_REDIS_HOST=redis
-      - QUEUE_BULL_REDIS_PORT=6379
+      EXECUTIONS_MODE=queue
+      QUEUE_BULL_REDIS_HOST=n8n-redis
+      QUEUE_BULL_REDIS_PORT=6379
 
-      - NODE_ENV=production
-      - GENERIC_TIMEZONE=Europe/Moscow
+      GENERIC_TIMEZONE=Asia/Yekaterinburg
+      NODE_ENV=production
+
+      N8N_BINARY_DATA_MODE=filesystem
+      N8N_DEFAULT_BINARY_DATA_MODE=filesystem
+      N8N_RESTRICT_FILE_ACCESS_TO=/data
+
+      N8N_EXPRESS_TRUST_PROXY=true
+      N8N_TRUSTED_PROXIES=*
+      N8N_PROXY_HOPS=1
+
+      HTTP_PROXY=${HTTP_PROXY}
+      HTTPS_PROXY=${HTTPS_PROXY}
+      NO_PROXY=${NO_PROXY}
+
+      PATH=/opt/shims:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
       - n8n_data:/home/node/.n8n
       - ./data:/data
+      - ./shims:/opt/shims:ro
 
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.n8n.rule=Host(`${DOMAIN}`)"
       - "traefik.http.routers.n8n.entrypoints=websecure"
-      - "traefik.http.routers.n8n.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.n8n.tls.certresolver=myresolver"
       - "traefik.http.services.n8n.loadbalancer.server.port=5678"
 
     depends_on:
-      - postgres
-      - redis
+      - n8n-postgres
+      - n8n-redis
 
-  worker:
+  n8n-worker:
     build:
       context: .
       dockerfile: Dockerfile.n8n
     container_name: n8n-worker
     restart: always
+    user: "0:0"
     command: worker
-    environment:
-      - DB_TYPE=postgresdb
-      - DB_POSTGRESDB_HOST=postgres
-      - DB_POSTGRESDB_PORT=5432
-      - DB_POSTGRESDB_DATABASE=n8n
-      - DB_POSTGRESDB_USER=n8n
-      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
 
-      - EXECUTIONS_MODE=queue
-      - QUEUE_BULL_REDIS_HOST=redis
-      - QUEUE_BULL_REDIS_PORT=6379
+    environment:
+      DB_TYPE=postgresdb
+      DB_POSTGRESDB_HOST=n8n-postgres
+      DB_POSTGRESDB_PORT=5432
+      DB_POSTGRESDB_DATABASE=n8n
+      DB_POSTGRESDB_USER=n8n
+      DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
+
+      N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+
+      EXECUTIONS_MODE=queue
+      QUEUE_BULL_REDIS_HOST=n8n-redis
+      QUEUE_BULL_REDIS_PORT=6379
+
+      HTTP_PROXY=${HTTP_PROXY}
+      HTTPS_PROXY=${HTTPS_PROXY}
+      NO_PROXY=${NO_PROXY}
+
+      PATH=/opt/shims:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
       - n8n_data:/home/node/.n8n
       - ./data:/data
+      - ./shims:/opt/shims:ro
 
     depends_on:
-      - postgres
-      - redis
+      - n8n-postgres
+      - n8n-redis
 
-  postgres:
+  n8n-postgres:
     image: postgres:15-alpine
     container_name: n8n-postgres
     restart: always
     environment:
-      POSTGRES_DB: n8n
-      POSTGRES_USER: n8n
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB=n8n
+      POSTGRES_USER=n8n
+      POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  redis:
+  n8n-redis:
     image: redis:7-alpine
     container_name: n8n-redis
     restart: always
     volumes:
       - redis_data:/data
 
-  bot:
+  n8n-bot:
     build: ./bot
     container_name: n8n-bot
     restart: always
-    env_file:
-      - ./bot/.env
 
-  traefik:
-    image: traefik:2.10
-    container_name: traefik
+    environment:
+      COMPOSE_PROJECT_NAME=n8n-install
+      TG_BOT_TOKEN=${TG_BOT_TOKEN}
+      TG_USER_ID=${TG_USER_ID}
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./:/opt/n8n-install
+
+  n8n-tools:
+    build:
+      context: .
+      dockerfile: Dockerfile.tools
+    container_name: n8n-tools
     restart: always
+    command: ["sh", "-lc", "sleep infinity"]
+
+    environment:
+      HTTP_PROXY=${HTTP_PROXY}
+      HTTPS_PROXY=${HTTPS_PROXY}
+      NO_PROXY=${NO_PROXY}
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/data
+
+  n8n-traefik:
+    image: traefik:2.10.4
+    container_name: n8n-traefik
+    restart: always
+
     command:
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
-      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
-      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
-      - "--certificatesresolvers.letsencrypt.acme.email=${EMAIL}"
-      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesResolvers.myresolver.acme.httpChallenge.entryPoint=web"
+      - "--certificatesResolvers.myresolver.acme.email=${EMAIL}"
+      - "--certificatesResolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
+
     ports:
       - "80:80"
       - "443:443"
+
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./letsencrypt:/letsencrypt
+      - ./traefik_dynamic:/etc/traefik/dynamic
 
 volumes:
   n8n_data:
