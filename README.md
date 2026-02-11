@@ -4,16 +4,14 @@
 
 ## 🚀 Что устанавливается
 
-| Компонент | Версия | Описание | Доступ |
-|-----------|--------|----------|--------|
-| **n8n** | latest (2.x) | Платформа автоматизации | `https://n8n.example.com` |
-| **n8n-worker** | latest | Воркер для queue mode | Внутренняя сеть |
-| **PostgreSQL** | 16-alpine | База данных | Через pgAdmin |
-| **pgAdmin 4** | latest | UI для PostgreSQL | `https://pgadmin.example.com` |
-| **Redis** | 7-alpine | Кэш и очередь задач | Через Redis Commander |
-| **Redis Commander** | latest | UI для Redis | `https://redis.example.com` |
-| **Traefik** | v3.2 | Reverse proxy + SSL | Автоматический |
-| **Telegram Bot** | Node 20 | Управление сервером | Telegram |
+| Компонент | Версия | Описание |
+|-----------|--------|----------|
+| **n8n** | latest (2.x) | Платформа автоматизации |
+| **n8n-worker** | latest | Воркер для queue mode |
+| **PostgreSQL** | 16-alpine | База данных |
+| **Redis** | 7-alpine | Кэш и очередь задач |
+| **Traefik** | v3.2 | Reverse proxy + SSL |
+| **Telegram Bot** | Node 20 | Управление сервером |
 
 ### Встроенные инструменты в образе n8n
 
@@ -30,10 +28,7 @@
 - **ОС:** Ubuntu 22.04 или 24.04 (чистый сервер)
 - **RAM:** минимум 2GB (рекомендуется 4GB)
 - **Диск:** минимум 10GB свободно
-- **3 DNS A-записи**, указывающие на IP сервера (на основе вашего домена):
-  - `n8n.example.com` — n8n (вы вводите)
-  - `pgadmin.example.com` — pgAdmin (создаётся автоматически)
-  - `redis.example.com` — Redis Commander (создаётся автоматически)
+- **Домен** с DNS A-записью, указывающей на IP сервера
 - **Порты 80 и 443** открыты
 - **Root-доступ**
 
@@ -42,13 +37,13 @@
 ### Один клик
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/kalininlive/n8n-beget-install/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/websansay/n8n-install/main/install.sh)
 ```
 
 ### Или скачать и запустить
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kalininlive/n8n-beget-install/main/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/websansay/n8n-install/main/install.sh -o install.sh
 chmod +x install.sh
 sudo bash install.sh
 ```
@@ -63,10 +58,9 @@ sudo bash install.sh
 | Telegram User ID | от @userinfobot | ❌ |
 
 **Всё остальное генерируется автоматически:**
-- Домены pgAdmin и Redis Commander (из базового домена: `n8n.example.com` → `pgadmin.example.com`, `redis.example.com`)
 - Пароль PostgreSQL
 - Ключ шифрования n8n (64 символа hex)
-- Пароли Redis, pgAdmin, Redis Commander UI
+- Пароль Redis
 - Таймзона: Europe/Moscow (можно поменять в `.env` после установки)
 
 ## 📁 Структура проекта
@@ -80,9 +74,6 @@ sudo bash install.sh
 ├── update_n8n.sh           # Обновление n8n
 ├── backup_n8n.sh           # Создание бэкапа
 ├── restore_n8n.sh          # Восстановление из бэкапа
-├── configs/
-│   └── pgadmin/
-│       └── servers.json    # Автоконфигурация pgAdmin
 ├── bot/
 │   ├── bot.js              # Telegram бот
 │   ├── Dockerfile          # Образ бота
@@ -93,40 +84,16 @@ sudo bash install.sh
 └── backups/                # Резервные копии
 ```
 
-## 🔐 Доступ к сервисам
+## 🔐 Доступ
 
 После установки все пароли выводятся в консоль и сохраняются в `/opt/websansay/n8n/.env`.
-
-### n8n
 
 ```
 URL: https://n8n.example.com
 Первый пользователь создаётся при первом входе.
 ```
 
-### pgAdmin
-
-```
-URL: https://pgadmin.example.com
-Email: ваш email из установки
-Пароль: см. .env → PGADMIN_PASSWORD
-
-PostgreSQL сервер добавлен автоматически:
-  Host: n8n-postgres
-  Database: n8n
-  User: n8n
-  Password: см. .env → POSTGRES_PASSWORD
-```
-
-### Redis Commander
-
-```
-URL: https://redis.example.com
-User: admin
-Password: см. .env → REDIS_UI_PASSWORD
-```
-
-### Быстрый просмотр паролей
+Быстрый просмотр паролей:
 
 ```bash
 cd /opt/websansay/n8n
@@ -160,7 +127,7 @@ docker compose -f /opt/websansay/n8n/docker-compose.yml restart n8n-bot
 | `/backup` | Создать резервную копию |
 | `/restart` | Перезапустить n8n |
 | `/disk` | Дисковое пространство (система + Docker) |
-| `/urls` | Адреса всех веб-интерфейсов |
+| `/urls` | Адрес n8n |
 
 ### Безопасность бота
 
@@ -283,8 +250,6 @@ ls -lhrt backups/
 
 ### Файловые зоны
 
-Репозиторий адаптирован под n8n 2.x с учётом breaking changes:
-
 | Путь | Назначение |
 |------|------------|
 | `/home/node/.n8n-files` | Стандартная sandbox-зона n8n v2 |
@@ -329,20 +294,18 @@ Internet
 │  v3.2   │
 └────┬────┘
      │
-     ├── n8n.example.com       → n8n        :5678
-     ├── pgadmin.example.com   → pgAdmin    :80
-     └── redis.example.com     → Redis Cmdr :8081
-                                     │
-              ┌──────────────────────┤
-              │                      │
-         ┌────┴────┐          ┌──────┴──────┐
-         │ n8n-app │◄────────►│ n8n-worker  │
-         └────┬────┘          └──────┬──────┘
-              │                      │
-         ┌────┴────┐          ┌──────┴──────┐
-         │Postgres │          │    Redis    │
-         │   16    │          │      7      │
-         └─────────┘          └─────────────┘
+     └── n8n.example.com → n8n :5678
+                             │
+              ┌──────────────┤
+              │              │
+         ┌────┴────┐  ┌─────┴─────┐
+         │ n8n-app │◄►│ n8n-worker│
+         └────┬────┘  └─────┬─────┘
+              │              │
+         ┌────┴────┐  ┌─────┴─────┐
+         │Postgres │  │   Redis   │
+         │   16    │  │     7     │
+         └─────────┘  └───────────┘
 ```
 
 **Queue mode:** n8n-app принимает вебхуки и UI, n8n-worker исполняет workflow. Оба читают задачи из Redis.
@@ -361,8 +324,6 @@ docker compose down && docker compose up -d
 | Переменная | Описание | По умолчанию |
 |------------|----------|:---:|
 | `DOMAIN` | Домен n8n | — |
-| `PGADMIN_DOMAIN` | Домен pgAdmin | — |
-| `REDIS_DOMAIN` | Домен Redis Commander | — |
 | `N8N_BINARY_DATA_MODE` | Хранение файлов | `filesystem` |
 | `N8N_LOG_LEVEL` | Уровень логов | `info` |
 | `N8N_RUNNERS_ENABLED` | Task runners | `false` |
@@ -376,7 +337,7 @@ docker compose down && docker compose up -d
 
 ```env
 PROXY_URL=http://user:pass@proxy-server:port
-NO_PROXY=localhost,127.0.0.1,::1,.local,postgres,redis,pgadmin,traefik,n8n,n8n-postgres,n8n-redis
+NO_PROXY=localhost,127.0.0.1,::1,.local,postgres,redis,traefik,n8n,n8n-postgres,n8n-redis,n8n-traefik
 ```
 
 ## 🔒 Безопасность
@@ -391,8 +352,7 @@ NO_PROXY=localhost,127.0.0.1,::1,.local,postgres,redis,pgadmin,traefik,n8n,n8n-p
 
 ### Изоляция
 
-- PostgreSQL и Redis **не доступны** из интернета
-- Доступ только через pgAdmin / Redis Commander (за Traefik + SSL)
+- PostgreSQL и Redis **не доступны** из интернета — только внутренняя сеть Docker
 - Для прямого подключения используйте SSH tunnel:
 
 ```bash
@@ -458,12 +418,6 @@ docker system prune -a --volumes
 
 `/status` показывает: uptime, RAM, диск, версию n8n, все контейнеры.
 
-### Веб-интерфейсы
-
-- **pgAdmin:** запросы к БД, размер, активные подключения
-- **Redis Commander:** память, ключи, статистика команд
-- **n8n:** встроенный `/healthz` и метрики (`N8N_METRICS=true`)
-
 ### Полезные команды
 
 ```bash
@@ -483,14 +437,13 @@ docker exec n8n sh -c "chromium-browser --version"
 docker exec n8n sh -c "tesseract --version 2>&1 | head -1"
 ```
 
-## 📝 Полезные команды
+## 📝 Шпаргалка команд
 
 ```bash
 cd /opt/websansay/n8n
 
 # ─── Статус ──────────────────────────────
 docker compose ps                    # Все контейнеры
-docker compose ps n8n                # Только n8n
 
 # ─── Логи ────────────────────────────────
 docker compose logs -f n8n           # Следить за логами
@@ -498,7 +451,6 @@ docker logs n8n --tail 100           # Последние 100 строк
 
 # ─── Управление ─────────────────────────
 docker compose restart n8n           # Рестарт n8n
-docker compose restart               # Рестарт всего
 docker compose down && docker compose up -d  # Полный перезапуск
 
 # ─── Обновление ─────────────────────────
