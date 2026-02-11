@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-exec /usr/bin/yt-dlp "$@"
-chmod +x shims/yt-dlp
