@@ -349,26 +349,60 @@ DOCKER_GID=$(getent group docker | cut -d: -f3 || echo "999")
 
 cat > "$INSTALL_DIR/Dockerfile.n8n" << 'DEOF'
 # ============================================================
-# n8n Custom Build — AI/ML + Media + Automation
+# n8n Custom Build — Multi-Stage (Hardened Image)
+# Stage 1: Alpine builder — устанавливаем все пакеты
+# Stage 2: Hardened n8n — копируем через tar
 # ============================================================
 
-FROM n8nio/n8n:latest
+# ─── STAGE 1: Builder ──────────────────────────────────────
+FROM alpine:3.22 AS builder
 
-USER root
-
-# ─── Системные пакеты ───────────────────────────────────────
 RUN apk add --no-cache \
     bash curl wget git make g++ gcc \
     python3 py3-pip libffi-dev \
     ffmpeg \
-    docker-cli \
     chromium chromium-chromedriver \
     font-noto font-noto-cjk font-noto-emoji \
     imagemagick ghostscript graphicsmagick \
     poppler-utils \
     tesseract-ocr tesseract-ocr-data-rus tesseract-ocr-data-eng \
     jq apache2-utils \
-    fontconfig ttf-freefont
+    fontconfig ttf-freefont \
+    docker-cli
+
+# Пакуем все инструменты в tar (follow symlinks с -h)
+RUN mkdir -p /export && tar chf /export/tools.tar \
+    /usr/bin/ffmpeg /usr/bin/ffprobe \
+    /usr/bin/python3 /usr/bin/python3.12 \
+    /usr/bin/chromium-browser /usr/lib/chromium/ \
+    /usr/bin/chromedriver \
+    /usr/bin/convert /usr/bin/magick /usr/bin/identify \
+    /usr/bin/gs /usr/bin/gm \
+    /usr/bin/pdftotext /usr/bin/pdftoppm \
+    /usr/bin/tesseract \
+    /usr/bin/jq /usr/bin/htpasswd \
+    /usr/bin/docker \
+    /usr/bin/git \
+    /usr/lib/lib*.so* \
+    /usr/lib/python3.12/ \
+    /usr/lib/tesseract-ocr/ \
+    /usr/share/tessdata/ \
+    /usr/share/fonts/ \
+    /usr/lib/ImageMagick*/ \
+    /usr/lib/graphicsmagick*/ \
+    /etc/ImageMagick*/ \
+    /etc/fonts/ \
+    /lib/lib*.so* \
+    2>/dev/null ; true
+
+# ─── STAGE 2: Hardened n8n ─────────────────────────────────
+FROM docker.n8n.io/n8nio/n8n:latest
+
+USER root
+
+# Распаковываем инструменты
+COPY --from=builder /export/tools.tar /tmp/tools.tar
+RUN tar xf /tmp/tools.tar -C / 2>/dev/null ; rm -f /tmp/tools.tar ; true
 
 # ─── Docker группа ──────────────────────────────────────────
 ARG DOCKER_GID=999
@@ -411,8 +445,6 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
 
 USER node
 WORKDIR /home/node
-
-# Не переопределяем ENTRYPOINT/CMD — используем из базового образа
 DEOF
 
 log_ok "Dockerfile.n8n создан"
