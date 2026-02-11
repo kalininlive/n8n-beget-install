@@ -1,134 +1,530 @@
-#!/bin/bash
-set -e
+# n8n Universal Auto-Install v4.0
 
-INSTALL_DIR="/opt/n8n-install"
+Полная автоматическая установка n8n 2.x на чистую Ubuntu 22.04 / 24.04 в один клик.
 
-### Проверка прав
-if (( EUID != 0 )); then
-  echo "❗ Скрипт должен быть запущен от root"
-  exit 1
-fi
+## 🚀 Что устанавливается
 
-clear
-echo "🌐 Автоматическая установка n8n v2+"
-echo "----------------------------------------"
+| Компонент | Версия | Описание | Доступ |
+|-----------|--------|----------|--------|
+| **n8n** | latest (2.x) | Платформа автоматизации | `https://n8n.example.com` |
+| **n8n-worker** | latest | Воркер для queue mode | Внутренняя сеть |
+| **PostgreSQL** | 16-alpine | База данных | Через pgAdmin |
+| **pgAdmin 4** | latest | UI для PostgreSQL | `https://pgadmin.example.com` |
+| **Redis** | 7-alpine | Кэш и очередь задач | Через Redis Commander |
+| **Redis Commander** | latest | UI для Redis | `https://redis.example.com` |
+| **Traefik** | v3.2 | Reverse proxy + SSL | Автоматический |
+| **Telegram Bot** | Node 20 | Управление сервером | Telegram |
 
-### 1. Ввод переменных (КАНОН, НЕ МЕНЯЕМ)
-read -p "🌐 Введите домен для n8n (например: n8n.example.com): " DOMAIN
-read -p "📧 Введите email для SSL-сертификата Let's Encrypt: " EMAIL
-read -p "🤖 Введите Telegram Bot Token: " TG_BOT_TOKEN
-read -p "👤 Введите Telegram User ID (для уведомлений): " TG_USER_ID
-read -s -p "🔐 Введите пароль для базы данных Postgres: " POSTGRES_PASSWORD
-echo
-read -p "🗝️  Введите ключ шифрования для n8n (Enter для генерации): " N8N_ENCRYPTION_KEY
+### Встроенные инструменты в образе n8n
 
-if [ -z "$N8N_ENCRYPTION_KEY" ]; then
-  N8N_ENCRYPTION_KEY=$(openssl rand -hex 32)
-  echo "✅ Сгенерирован ключ шифрования:"
-  echo "$N8N_ENCRYPTION_KEY"
-  echo "⬆️ СОХРАНИТЕ ЕГО. БЕЗ НЕГО ДАННЫЕ НЕ ВОССТАНОВИТЬ."
-fi
+- **AI/ML:** OpenAI, LangChain
+- **Медиа:** FFmpeg, ImageMagick, Ghostscript, GraphicsMagick
+- **OCR:** Tesseract (русский + английский)
+- **Браузер:** Chromium + Puppeteer
+- **Боты:** Telegram, Discord, VK
+- **Данные:** CSV, XLSX, XML, YAML парсеры
+- **30+ npm-библиотек** глобально для Code-нод
 
-### Proxy (опционально)
-echo
-read -p "🌍 Использовать proxy? (y/N): " USE_PROXY
+## 📋 Требования
 
-HTTP_PROXY=""
-HTTPS_PROXY=""
-NO_PROXY="localhost,127.0.0.1,::1,postgres,redis,traefik,n8n-app,n8n-worker"
+- **ОС:** Ubuntu 22.04 или 24.04 (чистый сервер)
+- **RAM:** минимум 2GB (рекомендуется 4GB)
+- **Диск:** минимум 10GB свободно
+- **3 домена** с DNS A-записями, указывающими на IP сервера:
+  - `n8n.example.com` — для n8n
+  - `pgadmin.example.com` — для pgAdmin
+  - `redis.example.com` — для Redis Commander
+- **Порты 80 и 443** открыты
+- **Root-доступ**
 
-if [[ "$USE_PROXY" =~ ^[Yy]$ ]]; then
-  read -p "HTTP_PROXY: " HTTP_PROXY
-  read -p "HTTPS_PROXY: " HTTPS_PROXY
-fi
+## 🎯 Установка
 
-### 2. Docker
-echo "📦 Проверка Docker..."
-if ! command -v docker &>/dev/null; then
-  curl -fsSL https://get.docker.com | sh
-fi
+### Один клик
 
-### 3. Клонирование проекта
-if [[ -d "$INSTALL_DIR" ]]; then
-  echo "❌ $INSTALL_DIR уже существует. Удалите вручную или выполните update."
-  exit 1
-fi
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/websansay/n8n-install/main/install.sh)
+```
 
-echo "📥 Клонируем проект с GitHub..."
-git clone https://github.com/kalininlive/n8n-beget-install.git "$INSTALL_DIR"
-cd "$INSTALL_DIR"
+### Или скачать и запустить
 
-### 4. Генерация .env (n8n v2+)
-cat > ".env" <<EOF
-# === Domain / SSL ===
-DOMAIN=${DOMAIN}
-EMAIL=${EMAIL}
+```bash
+curl -fsSL https://raw.githubusercontent.com/websansay/n8n-install/main/install.sh -o install.sh
+chmod +x install.sh
+sudo bash install.sh
+```
 
-# === Database ===
-POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+### Что спросит скрипт
 
-# === n8n core ===
-N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
-NODES_EXCLUDE=[]
-N8N_RESTRICT_FILE_ACCESS_TO=/data
+| Параметр | Пример | Обязательный |
+|----------|--------|:---:|
+| Домен n8n | `n8n.example.com` | ✅ |
+| Домен pgAdmin | `pgadmin.example.com` | ✅ |
+| Домен Redis Commander | `redis.example.com` | ✅ |
+| Email (SSL + pgAdmin) | `admin@example.com` | ✅ |
+| Пароль PostgreSQL | Enter = автогенерация | ✅ |
+| Таймзона | 1-5 из списка | ✅ |
+| Telegram Bot Token | от @BotFather | ❌ |
+| Telegram User ID | от @userinfobot | ❌ |
+| Внешний прокси | `http://user:pass@host:port` | ❌ |
 
-# === n8n v2 security defaults ===
-N8N_RUNNERS_ENABLED=true
-N8N_BLOCK_ENV_ACCESS_IN_NODE=true
-N8N_SKIP_AUTH_ON_OAUTH_CALLBACK=false
-N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+Все остальные пароли генерируются автоматически.
 
-# === Telegram ===
-TG_BOT_TOKEN=${TG_BOT_TOKEN}
-TG_USER_ID=${TG_USER_ID}
+## 📁 Структура проекта
 
-# === Proxy ===
-HTTP_PROXY=${HTTP_PROXY}
-HTTPS_PROXY=${HTTPS_PROXY}
-NO_PROXY=${NO_PROXY}
-EOF
+```
+/opt/websansay/n8n/
+├── install.sh              # Скрипт установки
+├── docker-compose.yml      # Конфигурация контейнеров
+├── Dockerfile.n8n          # Кастомный образ n8n
+├── .env                    # Все пароли и настройки
+├── update_n8n.sh           # Обновление n8n
+├── backup_n8n.sh           # Создание бэкапа
+├── restore_n8n.sh          # Восстановление из бэкапа
+├── configs/
+│   └── pgadmin/
+│       └── servers.json    # Автоконфигурация pgAdmin
+├── bot/
+│   ├── bot.js              # Telegram бот
+│   ├── Dockerfile          # Образ бота
+│   └── package.json        # Зависимости
+├── n8n-files/              # Sandbox-зона n8n v2 (Read/Write Binary Files)
+├── data/                   # Кастомная рабочая папка
+├── logs/                   # Логи операций
+└── backups/                # Резервные копии
+```
 
-chmod 600 .env
+## 🔐 Доступ к сервисам
 
-### 5. Директории
-mkdir -p data logs backups letsencrypt shims traefik_dynamic
-touch logs/backup.log
-chmod 600 letsencrypt || true
+После установки все пароли выводятся в консоль и сохраняются в `/opt/websansay/n8n/.env`.
 
-### 6. shims (как у тебя)
-cat > shims/ffmpeg <<'EOF'
-#!/usr/bin/env bash
-exec /usr/bin/ffmpeg "$@"
-EOF
+### n8n
 
-cat > shims/yt-dlp <<'EOF'
-#!/usr/bin/env bash
-exec /usr/bin/yt-dlp "$@"
-EOF
+```
+URL: https://n8n.example.com
+Первый пользователь создаётся при первом входе.
+```
 
-cat > shims/python <<'EOF'
-#!/usr/bin/env bash
-exec /usr/bin/python3 "$@"
-EOF
+### pgAdmin
 
-cat > shims/python3 <<'EOF'
-#!/usr/bin/env bash
-exec /usr/bin/python3 "$@"
-EOF
+```
+URL: https://pgadmin.example.com
+Email: ваш email из установки
+Пароль: см. .env → PGADMIN_PASSWORD
 
-chmod +x shims/*
+PostgreSQL сервер добавлен автоматически:
+  Host: n8n-postgres
+  Database: n8n
+  User: n8n
+  Password: см. .env → POSTGRES_PASSWORD
+```
 
-### 7. Запуск
-echo "🚀 Запуск docker compose..."
-docker compose up -d --build
+### Redis Commander
 
-### 8. Telegram notify
-curl -s -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
-  -d chat_id="${TG_USER_ID}" \
-  -d text="✅ Установка n8n v2+ завершена. Домен: https://${DOMAIN}"
+```
+URL: https://redis.example.com
+User: admin
+Password: см. .env → REDIS_UI_PASSWORD
+```
 
-### 9. Итог
-echo
-docker ps --format "table {{.Names}}\t{{.Status}}"
-echo
-echo "🎉 Готово! Открой: https://${DOMAIN}"
+### Быстрый просмотр паролей
+
+```bash
+cd /opt/websansay/n8n
+grep PASSWORD .env
+```
+
+## 🤖 Telegram бот
+
+### Настройка
+
+1. Создать бота: напишите [@BotFather](https://t.me/BotFather) → `/newbot`
+2. Получить User ID: напишите [@userinfobot](https://t.me/userinfobot)
+3. Указать при установке или добавить позже в `.env`:
+
+```bash
+nano /opt/websansay/n8n/.env
+# TG_BOT_TOKEN=123456:ABC-DEF...
+# TG_USER_ID=987654321
+
+docker compose -f /opt/websansay/n8n/docker-compose.yml restart n8n-bot
+```
+
+### Команды
+
+| Команда | Описание |
+|---------|----------|
+| `/start` `/help` | Справка |
+| `/status` | Uptime, RAM, диск, версия n8n, статус контейнеров |
+| `/logs [N]` | Последние N строк логов (по умолчанию 50) |
+| `/update` | Обновить n8n (бэкап → пересборка → запуск) |
+| `/backup` | Создать резервную копию |
+| `/restart` | Перезапустить n8n |
+| `/disk` | Дисковое пространство (система + Docker) |
+| `/urls` | Адреса всех веб-интерфейсов |
+
+### Безопасность бота
+
+- Авторизация по `TG_USER_ID` — только один пользователь
+- Если токен не задан — бот тихо завершается (не падает в цикл рестарта)
+
+## 🛠️ Управление
+
+### Статус
+
+```bash
+cd /opt/websansay/n8n
+docker compose ps
+```
+
+### Логи
+
+```bash
+# Все сервисы
+docker compose logs -f
+
+# Только n8n
+docker compose logs -f n8n
+
+# Последние 50 строк
+docker logs n8n --tail 50
+```
+
+### Перезапуск
+
+```bash
+cd /opt/websansay/n8n
+
+# Один сервис
+docker compose restart n8n
+
+# Все
+docker compose restart
+
+# Полная перезагрузка
+docker compose down && docker compose up -d
+```
+
+### Обновление n8n
+
+```bash
+cd /opt/websansay/n8n
+./update_n8n.sh
+```
+
+Или через Telegram: `/update`
+
+Скрипт автоматически:
+1. Проверяет версии (текущая vs последняя)
+2. Создаёт бэкап
+3. Останавливает n8n + worker
+4. Пересобирает образ с `--pull` (новый базовый n8n)
+5. Запускает контейнеры
+6. Проверяет healthcheck
+7. Чистит старые образы
+
+## 💾 Резервное копирование
+
+### Создание бэкапа
+
+```bash
+cd /opt/websansay/n8n
+./backup_n8n.sh
+```
+
+Или через Telegram: `/backup`
+
+**Что включено в бэкап:**
+- Дамп PostgreSQL (все workflows, credentials, настройки)
+- Конфигурация n8n (`/home/node/.n8n`)
+- Файлы `.env` и `docker-compose.yml`
+- Информация о версиях
+
+**Шифрование:** если `N8N_ENCRYPTION_KEY` задан в `.env`, бэкап шифруется AES-256-CBC.
+
+### Автоматические бэкапы
+
+Настраиваются при установке через cron — ежедневно в 2:00.
+
+```bash
+# Проверить расписание
+crontab -l
+
+# Изменить
+crontab -e
+```
+
+### Восстановление
+
+```bash
+cd /opt/websansay/n8n
+
+# Список бэкапов
+ls -lhrt backups/
+
+# Восстановить
+./restore_n8n.sh backups/n8n_backup_20250101_020000.tar.gz.enc
+```
+
+Скрипт:
+1. Создаст бэкап текущего состояния (на всякий случай)
+2. Остановит все контейнеры
+3. Расшифрует и распакует
+4. Восстановит PostgreSQL
+5. Восстановит конфигурацию n8n
+6. Предложит восстановить `.env` (опционально)
+7. Запустит всё
+
+### Хранение
+
+- Бэкапы хранятся в `/opt/websansay/n8n/backups/`
+- Автоудаление старше 7 дней (настраивается: `BACKUP_RETENTION_DAYS` в `.env`)
+
+## ⚙️ n8n 2.x — Безопасность файловой системы
+
+### Файловые зоны
+
+Репозиторий адаптирован под n8n 2.x с учётом breaking changes:
+
+| Путь | Назначение |
+|------|------------|
+| `/home/node/.n8n-files` | Стандартная sandbox-зона n8n v2 |
+| `/data` | Кастомная рабочая папка проекта |
+
+Обе зоны добавлены в whitelist `N8N_RESTRICT_FILE_ACCESS_TO`.
+
+### Использование в нодах
+
+**Read/Write Binary Files:**
+
+```
+/home/node/.n8n-files/report.pdf    ✅ Работает
+/data/project/document.xlsx          ✅ Работает
+/tmp/file.txt                        ❌ Запрещено
+```
+
+**Execute Command:**
+
+```bash
+echo "data" > /home/node/.n8n-files/output.txt   # ✅
+cp file.csv /data/reports/                         # ✅
+```
+
+### Ключевые настройки
+
+```env
+NODES_EXCLUDE=[]                                          # Execute Command разрешён
+N8N_RESTRICT_FILE_ACCESS_TO=/home/node/.n8n-files;/data   # Whitelist
+N8N_RUNNERS_ENABLED=false                                 # false = быстрее
+N8N_COMMUNITY_PACKAGES_ENABLED=true                       # Community пакеты
+```
+
+## 🌐 Архитектура
+
+```
+Internet
+    │
+    ▼
+┌─────────┐
+│ Traefik │ :80 / :443 (SSL Let's Encrypt)
+│  v3.2   │
+└────┬────┘
+     │
+     ├── n8n.example.com       → n8n        :5678
+     ├── pgadmin.example.com   → pgAdmin    :80
+     └── redis.example.com     → Redis Cmdr :8081
+                                     │
+              ┌──────────────────────┤
+              │                      │
+         ┌────┴────┐          ┌──────┴──────┐
+         │ n8n-app │◄────────►│ n8n-worker  │
+         └────┬────┘          └──────┬──────┘
+              │                      │
+         ┌────┴────┐          ┌──────┴──────┐
+         │Postgres │          │    Redis    │
+         │   16    │          │      7      │
+         └─────────┘          └─────────────┘
+```
+
+**Queue mode:** n8n-app принимает вебхуки и UI, n8n-worker исполняет workflow. Оба читают задачи из Redis.
+
+## 🔧 Конфигурация
+
+Все настройки в `/opt/websansay/n8n/.env`. После изменения:
+
+```bash
+cd /opt/websansay/n8n
+docker compose down && docker compose up -d
+```
+
+### Основные переменные
+
+| Переменная | Описание | По умолчанию |
+|------------|----------|:---:|
+| `DOMAIN` | Домен n8n | — |
+| `PGADMIN_DOMAIN` | Домен pgAdmin | — |
+| `REDIS_DOMAIN` | Домен Redis Commander | — |
+| `N8N_BINARY_DATA_MODE` | Хранение файлов | `filesystem` |
+| `N8N_LOG_LEVEL` | Уровень логов | `info` |
+| `N8N_RUNNERS_ENABLED` | Task runners | `false` |
+| `EXECUTIONS_MODE` | Режим выполнения | `queue` |
+| `BACKUP_RETENTION_DAYS` | Хранить бэкапы (дней) | `7` |
+| `PROXY_URL` | Внешний прокси | пусто |
+
+### Прокси
+
+Если n8n должен ходить в интернет через прокси:
+
+```env
+PROXY_URL=http://user:pass@proxy-server:port
+NO_PROXY=localhost,127.0.0.1,::1,.local,postgres,redis,pgadmin,traefik,n8n,n8n-postgres,n8n-redis
+```
+
+## 🔒 Безопасность
+
+### Рекомендации
+
+1. **SSH:** только по ключу, отключить root-пароль
+2. **Файрвол:** открыты только порты 80, 443 (и 22 для SSH)
+3. **Обновления:** регулярно через `/update` в боте
+4. **Бэкапы:** включены по умолчанию (ежедневно в 2:00)
+5. **Мониторинг:** `/status` в боте
+
+### Изоляция
+
+- PostgreSQL и Redis **не доступны** из интернета
+- Доступ только через pgAdmin / Redis Commander (за Traefik + SSL)
+- Для прямого подключения используйте SSH tunnel:
+
+```bash
+# PostgreSQL
+ssh -L 5432:localhost:5432 user@server
+
+# Redis
+ssh -L 6379:localhost:6379 user@server
+```
+
+## 🐛 Решение проблем
+
+### n8n не запускается
+
+```bash
+cd /opt/websansay/n8n
+docker compose logs n8n --tail 50
+docker compose ps
+```
+
+### SSL сертификаты не выдаются
+
+1. Проверьте DNS: `dig n8n.example.com` → ваш IP
+2. Порты 80/443 открыты: `ss -tlnp | grep -E ':(80|443)'`
+3. Логи Traefik: `docker compose logs n8n-traefik`
+
+### Бот не отвечает
+
+```bash
+docker compose logs n8n-bot --tail 20
+grep TG_ /opt/websansay/n8n/.env
+docker compose restart n8n-bot
+```
+
+### Не хватает памяти (OOM)
+
+```bash
+# Проверить SWAP
+free -h
+swapon --show
+
+# Добавить если нет
+fallocate -l 4G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
+```
+
+### Очистка диска
+
+```bash
+# Старые образы
+docker image prune -a
+
+# Build cache
+docker builder prune -af
+
+# Всё неиспользуемое
+docker system prune -a --volumes
+```
+
+## 📊 Мониторинг
+
+### Telegram бот
+
+`/status` показывает: uptime, RAM, диск, версию n8n, все контейнеры.
+
+### Веб-интерфейсы
+
+- **pgAdmin:** запросы к БД, размер, активные подключения
+- **Redis Commander:** память, ключи, статистика команд
+- **n8n:** встроенный `/healthz` и метрики (`N8N_METRICS=true`)
+
+### Полезные команды
+
+```bash
+# Ресурсы контейнеров в реальном времени
+docker stats
+
+# Версия n8n
+docker exec n8n n8n --version
+
+# Размер базы данных
+docker exec n8n-postgres psql -U n8n -c "SELECT pg_size_pretty(pg_database_size('n8n'));"
+
+# Проверка инструментов в контейнере
+docker exec n8n sh -c "ffmpeg -version 2>&1 | head -1"
+docker exec n8n sh -c "python3 --version"
+docker exec n8n sh -c "chromium-browser --version"
+docker exec n8n sh -c "tesseract --version 2>&1 | head -1"
+```
+
+## 📝 Полезные команды
+
+```bash
+cd /opt/websansay/n8n
+
+# ─── Статус ──────────────────────────────
+docker compose ps                    # Все контейнеры
+docker compose ps n8n                # Только n8n
+
+# ─── Логи ────────────────────────────────
+docker compose logs -f n8n           # Следить за логами
+docker logs n8n --tail 100           # Последние 100 строк
+
+# ─── Управление ─────────────────────────
+docker compose restart n8n           # Рестарт n8n
+docker compose restart               # Рестарт всего
+docker compose down && docker compose up -d  # Полный перезапуск
+
+# ─── Обновление ─────────────────────────
+./update_n8n.sh                      # Обновить n8n
+
+# ─── Бэкапы ─────────────────────────────
+./backup_n8n.sh                      # Создать бэкап
+./restore_n8n.sh backups/FILE        # Восстановить
+ls -lhrt backups/                    # Список бэкапов
+
+# ─── Пароли ─────────────────────────────
+grep PASSWORD .env                   # Все пароли
+
+# ─── Диагностика ────────────────────────
+docker stats                         # Ресурсы
+df -h                                # Диск
+free -h                              # RAM + SWAP
+docker system df                     # Docker storage
+```
+
+## 📜 Лицензия
+
+MIT License — используйте свободно для личных и коммерческих проектов.
+
+---
+
+**Автор:** [@WebSansay](https://t.me/websansay)
+**Канал:** [Автоматизации и сценарии](https://t.me/+p3VDHRpArOc5YzM6)
+**Поддержать:** [Boosty](https://boosty.to/websansay)
