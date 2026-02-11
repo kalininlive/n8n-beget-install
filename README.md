@@ -37,13 +37,13 @@
 ### Один клик
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/websansay/n8n-install/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/kalininlive/n8n-beget-install/main/install.sh)
 ```
 
 ### Или скачать и запустить
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/websansay/n8n-install/main/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/kalininlive/n8n-beget-install/main/install.sh -o install.sh
 chmod +x install.sh
 sudo bash install.sh
 ```
