@@ -87,104 +87,81 @@ echo ""
 # ============================================================
 log_step "Настройка параметров"
 
-# --- Домены ---
+# --- 1. Домен n8n ---
 read -p "Домен для n8n (например n8n.example.com): " DOMAIN
 while [[ -z "$DOMAIN" ]]; do
     log_error "Домен не может быть пустым"
     read -p "Домен для n8n: " DOMAIN
 done
 
-read -p "Домен для pgAdmin (например pgadmin.example.com): " PGADMIN_DOMAIN
-while [[ -z "$PGADMIN_DOMAIN" ]]; do
-    log_error "Домен pgAdmin не может быть пустым"
-    read -p "Домен для pgAdmin: " PGADMIN_DOMAIN
-done
-
-read -p "Домен для Redis Commander (например redis.example.com): " REDIS_DOMAIN
-while [[ -z "$REDIS_DOMAIN" ]]; do
-    log_error "Домен Redis Commander не может быть пустым"
-    read -p "Домен для Redis Commander: " REDIS_DOMAIN
-done
-
-# --- Email ---
-read -p "Email для SSL и pgAdmin: " EMAIL
+# --- 2. Email ---
+read -p "Email для SSL сертификата: " EMAIL
 while ! echo "$EMAIL" | grep -qE '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'; do
     log_error "Некорректный email"
     read -p "Email: " EMAIL
 done
 
-# --- Пароль PostgreSQL ---
-read -sp "Пароль PostgreSQL (или Enter для автогенерации): " DB_PASSWORD_INPUT
+# --- 3. Telegram Bot Token ---
 echo ""
-if [[ -z "$DB_PASSWORD_INPUT" ]]; then
-    DB_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
-    log_info "Пароль PostgreSQL сгенерирован автоматически"
-else
-    DB_PASSWORD="$DB_PASSWORD_INPUT"
-fi
+read -p "Telegram Bot Token (от @BotFather, Enter для пропуска): " TG_BOT_TOKEN
+TG_BOT_TOKEN="${TG_BOT_TOKEN:-}"
 
-# --- Таймзона ---
-echo ""
-echo "Выберите таймзону:"
-echo "  1) Europe/Moscow (МСК)"
-echo "  2) Asia/Yekaterinburg (ЕКБ)"
-echo "  3) Asia/Novosibirsk (НСК)"
-echo "  4) Europe/Kiev (Киев)"
-echo "  5) Другая (ввести вручную)"
-read -p "Выбор [1]: " TZ_CHOICE
-case "${TZ_CHOICE:-1}" in
-    1) TIMEZONE="Europe/Moscow" ;;
-    2) TIMEZONE="Asia/Yekaterinburg" ;;
-    3) TIMEZONE="Asia/Novosibirsk" ;;
-    4) TIMEZONE="Europe/Kiev" ;;
-    5) read -p "Введите таймзону (например America/New_York): " TIMEZONE
-       [[ -z "$TIMEZONE" ]] && TIMEZONE="Europe/Moscow" ;;
-    *) TIMEZONE="Europe/Moscow" ;;
-esac
-
-# --- Telegram ---
-echo ""
-read -p "Telegram Bot Token (Enter для пропуска): " TG_BOT_TOKEN
-read -p "Telegram User ID (Enter для пропуска): " TG_USER_ID
+# --- 4. Telegram User ID ---
+read -p "Telegram User ID (от @userinfobot, Enter для пропуска): " TG_USER_ID
+TG_USER_ID="${TG_USER_ID:-}"
 
 if [[ -z "$TG_BOT_TOKEN" ]] || [[ -z "$TG_USER_ID" ]]; then
-    log_warn "Telegram бот не будет настроен (можно добавить позже в .env)"
-    TG_BOT_TOKEN="${TG_BOT_TOKEN:-}"
-    TG_USER_ID="${TG_USER_ID:-}"
+    log_warn "Telegram бот не настроен (можно добавить позже в .env)"
 fi
 
-# --- Прокси ---
-echo ""
-read -p "Внешний прокси для n8n (формат http://user:pass@host:port, Enter для пропуска): " PROXY_URL
-PROXY_URL="${PROXY_URL:-}"
-
 # ============================================================
-# ГЕНЕРАЦИЯ СЕКРЕТОВ
+# АВТОГЕНЕРАЦИЯ ВСЕХ ПАРАМЕТРОВ
 # ============================================================
-log_step "Генерация паролей и ключей"
+log_step "Генерация конфигурации"
 
+# Домены pgAdmin и Redis Commander из базового домена
+# n8n.example.com → example.com → pgadmin.example.com, redis.example.com
+DOT_COUNT=$(echo "$DOMAIN" | tr -cd '.' | wc -c)
+if (( DOT_COUNT >= 2 )); then
+    # n8n.example.com → example.com
+    BASE_DOMAIN=$(echo "$DOMAIN" | sed 's/^[^.]*\.//')
+else
+    # example.com → example.com (домен без поддомена)
+    BASE_DOMAIN="$DOMAIN"
+fi
+PGADMIN_DOMAIN="pgadmin.${BASE_DOMAIN}"
+REDIS_DOMAIN="redis.${BASE_DOMAIN}"
+log_ok "pgAdmin:         ${PGADMIN_DOMAIN}"
+log_ok "Redis Commander: ${REDIS_DOMAIN}"
+
+# Все пароли и ключи
+DB_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
 ENCRYPTION_KEY=$(openssl rand -hex 32)
 REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
 PGADMIN_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
 REDIS_UI_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
+log_ok "Пароли и ключ шифрования сгенерированы"
 
-log_ok "Все секреты сгенерированы"
+# Таймзона и прокси — дефолты
+TIMEZONE="Europe/Moscow"
+PROXY_URL=""
 
 # ============================================================
 # ПОДТВЕРЖДЕНИЕ
 # ============================================================
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo -e "${BOLD}Подтвердите параметры установки:${NC}"
+echo -e "${BOLD}Параметры установки:${NC}"
 echo ""
-echo -e "  n8n:             https://${DOMAIN}"
-echo -e "  pgAdmin:         https://${PGADMIN_DOMAIN}"
-echo -e "  Redis Commander: https://${REDIS_DOMAIN}"
+echo -e "  n8n:             ${CYAN}https://${DOMAIN}${NC}"
+echo -e "  pgAdmin:         ${CYAN}https://${PGADMIN_DOMAIN}${NC}"
+echo -e "  Redis Commander: ${CYAN}https://${REDIS_DOMAIN}${NC}"
 echo -e "  Email:           ${EMAIL}"
 echo -e "  Таймзона:        ${TIMEZONE}"
-echo -e "  Telegram бот:    $([ -n "$TG_BOT_TOKEN" ] && echo "✅ Настроен" || echo "❌ Пропущен")"
-echo -e "  Прокси:          $([ -n "$PROXY_URL" ] && echo "$PROXY_URL" || echo "Нет")"
+echo -e "  Telegram бот:    $([ -n "$TG_BOT_TOKEN" ] && echo "✅" || echo "❌ пропущен")"
 echo -e "  Директория:      ${INSTALL_DIR}"
+echo ""
+echo -e "  ${YELLOW}⚠ DNS A-записи для всех 3 доменов должны указывать на этот сервер${NC}"
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 read -p "Начать установку? (y/n): " -r
