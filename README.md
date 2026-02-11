@@ -30,10 +30,10 @@
 - **ОС:** Ubuntu 22.04 или 24.04 (чистый сервер)
 - **RAM:** минимум 2GB (рекомендуется 4GB)
 - **Диск:** минимум 10GB свободно
-- **3 домена** с DNS A-записями, указывающими на IP сервера:
-  - `n8n.example.com` — для n8n
-  - `pgadmin.example.com` — для pgAdmin
-  - `redis.example.com` — для Redis Commander
+- **3 DNS A-записи**, указывающие на IP сервера (на основе вашего домена):
+  - `n8n.example.com` — n8n (вы вводите)
+  - `pgadmin.example.com` — pgAdmin (создаётся автоматически)
+  - `redis.example.com` — Redis Commander (создаётся автоматически)
 - **Порты 80 и 443** открыты
 - **Root-доступ**
 
@@ -42,32 +42,32 @@
 ### Один клик
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/kalininlive/n8n-beget-install/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/websansay/n8n-install/main/install.sh)
 ```
 
 ### Или скачать и запустить
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kalininlive/n8n-beget-install/main/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/websansay/n8n-install/main/install.sh -o install.sh
 chmod +x install.sh
 sudo bash install.sh
 ```
 
-### Что спросит скрипт
+### Что спросит скрипт (всего 4 вопроса)
 
 | Параметр | Пример | Обязательный |
 |----------|--------|:---:|
 | Домен n8n | `n8n.example.com` | ✅ |
-| Домен pgAdmin | `pgadmin.example.com` | ✅ |
-| Домен Redis Commander | `redis.example.com` | ✅ |
-| Email (SSL + pgAdmin) | `admin@example.com` | ✅ |
-| Пароль PostgreSQL | Enter = автогенерация | ✅ |
-| Таймзона | 1-5 из списка | ✅ |
+| Email для SSL | `admin@example.com` | ✅ |
 | Telegram Bot Token | от @BotFather | ❌ |
 | Telegram User ID | от @userinfobot | ❌ |
-| Внешний прокси | `http://user:pass@host:port` | ❌ |
 
-Все остальные пароли генерируются автоматически.
+**Всё остальное генерируется автоматически:**
+- Домены pgAdmin и Redis Commander (из базового домена: `n8n.example.com` → `pgadmin.example.com`, `redis.example.com`)
+- Пароль PostgreSQL
+- Ключ шифрования n8n (64 символа hex)
+- Пароли Redis, pgAdmin, Redis Commander UI
+- Таймзона: Europe/Moscow (можно поменять в `.env` после установки)
 
 ## 📁 Структура проекта
 
@@ -523,7 +523,8 @@ docker system df                     # Docker storage
 
 MIT License — используйте свободно для личных и коммерческих проектов.
 
+---
+
 **Автор:** [@WebSansay](https://t.me/websansay)
 **Канал:** [Автоматизации и сценарии](https://t.me/+p3VDHRpArOc5YzM6)
 **Поддержать:** [Boosty](https://boosty.to/websansay)
----
