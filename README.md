@@ -480,7 +480,3 @@ MIT License — используйте свободно для личных и �
 **Автор:** [@WebSansay](https://t.me/websansay)
 **Канал:** [Автоматизации и сценарии](https://t.me/+p3VDHRpArOc5YzM6)
 **Поддержать:** [Boosty](https://boosty.to/websansay)
-
-**Автор:** [@WebSansay](https://t.me/websansay)
-**Канал:** [Автоматизации и сценарии](https://t.me/+p3VDHRpArOc5YzM6)
-**Поддержать:** [Boosty](https://boosty.to/websansay)
