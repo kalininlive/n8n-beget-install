@@ -10,7 +10,7 @@
 | **n8n-worker** | latest | Воркер для queue mode |
 | **PostgreSQL** | 16-alpine | База данных |
 | **Redis** | 7-alpine | Кэш и очередь задач |
-| **Traefik** | v3.2 | Reverse proxy + SSL |
+| **Traefik** | latest | Reverse proxy + SSL |
 | **Telegram Bot** | Node 20 | Управление сервером |
 
 ### Встроенные инструменты в образе n8n
@@ -291,7 +291,7 @@ Internet
     ▼
 ┌─────────┐
 │ Traefik │ :80 / :443 (SSL Let's Encrypt)
-│  v3.2   │
+│  latest   │
 └────┬────┘
      │
      └── n8n.example.com → n8n :5678
@@ -476,6 +476,10 @@ docker system df                     # Docker storage
 MIT License — используйте свободно для личных и коммерческих проектов.
 
 ---
+
+**Автор:** [@WebSansay](https://t.me/websansay)
+**Канал:** [Автоматизации и сценарии](https://t.me/+p3VDHRpArOc5YzM6)
+**Поддержать:** [Boosty](https://boosty.to/websansay)
 
 **Автор:** [@WebSansay](https://t.me/websansay)
 **Канал:** [Автоматизации и сценарии](https://t.me/+p3VDHRpArOc5YzM6)
