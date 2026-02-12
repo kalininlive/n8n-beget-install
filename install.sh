@@ -639,7 +639,7 @@ services:
   # Traefik v3 — Reverse Proxy + SSL
   # ──────────────────────────────────────────────────────────
   n8n-traefik:
-    image: traefik:v3.2
+    image: traefik:latest
     container_name: n8n-traefik
     restart: unless-stopped
     command:
@@ -1206,7 +1206,7 @@ echo -e "  ${BOLD}📦 Версии:${NC}"
 echo -e "     n8n:              v${N8N_VER}"
 echo -e "     PostgreSQL:       16"
 echo -e "     Redis:            7"
-echo -e "     Traefik:          v3.2"
+echo -e "     Traefik:          latest"
 echo ""
 echo -e "  ${BOLD}📝 Команды:${NC}"
 echo "     cd $INSTALL_DIR"
