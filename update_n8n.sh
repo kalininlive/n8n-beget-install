@@ -109,9 +109,9 @@ check_engine() {
   # $1 — имя проверки, $2 — шим на хосте (может быть пустым), $3 — эквивалент через docker exec, $4 — аргументы шима
   local name="$1" shim="$2" fallback="$3" args="${4:-}" out="" rc=0
   if [ -n "$shim" ] && [ -x "$shim" ]; then
-    out=$(timeout 60 "$shim" $args 2>&1) || rc=$?
+    out=$(timeout 60 "$shim" $args 2>&1 </dev/null) || rc=$?
   else
-    out=$(timeout 60 sh -c "$fallback" 2>&1) || rc=$?
+    out=$(timeout 60 sh -c "$fallback" 2>&1 </dev/null) || rc=$?
   fi
   if [ "$rc" -eq 0 ]; then
     echo "  ✅ $name: $(printf '%s' "$out" | tail -n 1 | cut -c1-120)"
@@ -122,7 +122,7 @@ check_engine() {
   fi
   return 0
 }
-check_engine "remotion (маскот)"       "$BASE_DIR/shims/remotion"    "docker exec -i n8n-media-render remotion --version" "--version"
+check_engine "remotion (маскот)"       "$BASE_DIR/shims/remotion"    "docker exec -i n8n-media-render remotion versions" "versions"
 check_engine "render-html (карусели)"  "$BASE_DIR/shims/render-html" "docker exec -i n8n-media-render node /opt/engines/html-render/render.mjs --help" "--help"
 check_engine "ffmpeg (n8n-tools)"      "$BASE_DIR/shims/ffmpeg"      "docker exec -i n8n-tools ffmpeg -version" "-version"
 check_engine "edge-tts"                ""                            "docker exec -i n8n-app wget -qO- http://edge-tts:5050/v1/models"
