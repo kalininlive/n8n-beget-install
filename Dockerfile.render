@@ -34,7 +34,10 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV CHROMIUM_PATH=/usr/bin/chromium
 
 # Движок маскота (Remotion CLI глобально; сам проект живёт в томе /data/studio-engine)
-RUN npm install -g @remotion/cli remotion hyperframes
+# Версии закреплены = текущее состояние сервера (проект studio-engine на 4.0.515 совместим). Поднимать осознанно.
+ARG REMOTION_VERSION=4.0.521
+ARG HYPERFRAMES_VERSION=0.8.30
+RUN npm install -g @remotion/cli@${REMOTION_VERSION} remotion@${REMOTION_VERSION} hyperframes@${HYPERFRAMES_VERSION}
 
 # Движок html-render (карусели): версионируется вместе с этим Dockerfile
 COPY engines/html-render /opt/engines/html-render
