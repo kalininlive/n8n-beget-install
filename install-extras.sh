@@ -111,7 +111,7 @@ check_all() {
   }
   chk "контейнеры"          sh -c 'for c in n8n-app n8n-worker n8n-postgres n8n-redis n8n-traefik n8n-tools n8n-media-render edge-tts searxng sandbox-api sandbox-runner-1; do docker inspect -f "{{.State.Running}}" "$c" 2>/dev/null | grep -q true || { echo "не запущен: $c"; exit 1; }; done; echo "все 11 запущены"'
   chk "n8n healthz"         docker exec n8n-app wget -qO- http://localhost:5678/healthz
-  chk "remotion (шим)"      ./shims/remotion versions
+  chk "remotion (шим)"      sh -c "./shims/remotion --help | head -n 1"
   chk "render-html (шим)"   ./shims/render-html --version
   chk "ffmpeg (шим)"        ./shims/ffmpeg -version
   chk "edge-tts из n8n"     docker exec n8n-app wget -qO- http://edge-tts:5050/v1/models

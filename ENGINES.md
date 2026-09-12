@@ -47,7 +47,7 @@
 
 **Ручная отладка / smoke-тест.**
 ```bash
-/opt/n8n-install/shims/remotion versions
+/opt/n8n-install/shims/remotion --help
 /opt/n8n-install/shims/remotion render /data/studio-engine/src/index.ts CoreSmokeTest /data/reels/smoketest.mp4
 docker exec -it n8n-media-render sh -lc 'cd /data/studio-engine && npm run typecheck'
 ```
@@ -113,4 +113,4 @@ docker exec -it n8n-media-render node /opt/engines/html-render/render.mjs --help
 
 - На сервере: `bash /opt/n8n-install/install-extras.sh --check`
 - С ПК: `cd moy-n8n && npm run doctor` (контейнеры, шимы, `NO_PROXY`, тестовый рендер PNG, smoke-рендер Remotion)
-- После обновления n8n `update_n8n.sh` сам прогоняет `remotion versions` / `render-html --help` и пишет в Telegram, если что-то не отвечает.
+- После обновления n8n `update_n8n.sh` сам прогоняет `remotion --help` / `render-html --help` и пишет в Telegram, если что-то не отвечает.

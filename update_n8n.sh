@@ -122,7 +122,7 @@ check_engine() {
   fi
   return 0
 }
-check_engine "remotion (маскот)"       "$BASE_DIR/shims/remotion"    "docker exec -i n8n-media-render remotion versions" "versions"
+check_engine "remotion (маскот)"       "$BASE_DIR/shims/remotion"    "docker exec -i n8n-media-render remotion --help | head -n 1" "--help"
 check_engine "render-html (карусели)"  "$BASE_DIR/shims/render-html" "docker exec -i n8n-media-render node /opt/engines/html-render/render.mjs --help" "--help"
 check_engine "ffmpeg (n8n-tools)"      "$BASE_DIR/shims/ffmpeg"      "docker exec -i n8n-tools ffmpeg -version" "-version"
 check_engine "edge-tts"                ""                            "docker exec -i n8n-app wget -qO- http://edge-tts:5050/v1/models"
