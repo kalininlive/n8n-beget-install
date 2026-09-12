@@ -1,0 +1,157 @@
+{
+  "name": "🔄 [СЕРВИС] Синхронизация ассетов S3 → сервер",
+  "settings": { "executionOrder": "v1", "saveManualExecutions": true },
+  "nodes": [
+    {
+      "id": "n-note",
+      "name": "Как это работает",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-60, -420],
+      "parameters": {
+        "width": 900,
+        "height": 300,
+        "content": "## 🔄 Синхронизация ассетов из S3 на сервер n8n\n\n**Зачем:** S3-бакет — источник правды по ассетам (персонаж, стикеры, SFX, шрифты). Локальная папка `/data/studio-engine/public` — кэш, из которого рендерят маскот и карусели. Запуск по кнопке (или вызвать из другого воркфлоу через Execute Workflow) — докачиваются **только новые и изменённые** файлы.\n\n**Настройка — только нода «Конфиг»:** `s3_bucket`, `s3_prefix` (папка в бакете, зеркало `public/`: `<prefix>assets/stickers/x.png` → `/data/studio-engine/public/assets/stickers/x.png`), `local_dir`, `dry_run` (true = только показать план, ничего не качать).\n\n**Credential:** нода S3 → `S3Beget` (endpoint `https://s3.ru1.storage.beget.cloud`). У клиента — его бакет и его credential, остальное без изменений.\n\n**Сверка:** файл качается, если его нет локально, отличается размер или в S3 он новее (LastModified > mtime локального). Удаление локальных файлов, которых нет в S3, не делается."
+      }
+    },
+    {
+      "id": "n-trigger",
+      "name": "Запуск по кнопке",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 0],
+      "parameters": {}
+    },
+    {
+      "id": "n-config",
+      "name": "Конфиг",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [220, 0],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "c1", "name": "s3_bucket", "value": "e02faa1b8ed3-ugcws", "type": "string" },
+            { "id": "c2", "name": "s3_prefix", "value": "mascot/", "type": "string" },
+            { "id": "c3", "name": "local_dir", "value": "/data/studio-engine/public", "type": "string" },
+            { "id": "c4", "name": "dry_run", "value": true, "type": "boolean" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "n-s3list",
+      "name": "S3 · Список файлов",
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [440, 0],
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "getAll",
+        "bucketName": "={{ $('Конфиг').item.json.s3_bucket }}",
+        "returnAll": true,
+        "options": { "folderKey": "={{ $('Конфиг').item.json.s3_prefix }}" }
+      },
+      "credentials": { "s3": { "id": "BSr0GYMWTTlMKEH1", "name": "S3Beget" } }
+    },
+    {
+      "id": "n-local",
+      "name": "Локальные файлы",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [660, 0],
+      "executeOnce": true,
+      "parameters": {
+        "command": "=D='{{ $('Конфиг').first().json.local_dir }}'; mkdir -p \"$D\" && cd \"$D\" && find . -type f -exec stat -c '%n|%s|%Y' {} +"
+      }
+    },
+    {
+      "id": "n-compare",
+      "name": "Сравнение",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 0],
+      "parameters": {
+        "jsCode": "// Сверка S3 ↔ локальная папка. На выходе — по одному item на файл, который надо скачать,\n// либо один item { nothing: true } с планом/статистикой (dry_run или нет изменений).\nconst cfg = $('Конфиг').first().json;\nconst prefix = String(cfg.s3_prefix || '').replace(/^\\/+/, '');\nconst localDir = String(cfg.local_dir || '/data/studio-engine/public').replace(/\\/+$/, '');\nconst dryRun = cfg.dry_run === true || cfg.dry_run === 'true';\n\n// локальные файлы: строки \"./rel|size|mtime\"\nconst stdout = String($('Локальные файлы').first().json.stdout || '');\nconst local = new Map();\nfor (const line of stdout.split('\\n')) {\n  const m = line.match(/^\\.\\/(.+)\\|(\\d+)\\|(\\d+)\\s*$/);\n  if (m) local.set(m[1], { size: Number(m[2]), mtime: Number(m[3]) });\n}\n\nconst s3 = $('S3 · Список файлов').all().map(i => i.json).filter(o => o && o.Key);\nconst out = [];\nlet same = 0, missing = 0, changed = 0, skipped = 0;\nfor (const o of s3) {\n  const key = String(o.Key);\n  if (key.endsWith('/')) { skipped++; continue; }                 // «папки»\n  if (prefix && !key.startsWith(prefix)) { skipped++; continue; }\n  const rel = key.slice(prefix.length).replace(/^\\/+/, '');\n  if (!rel || rel.split('/').includes('..')) { skipped++; continue; }\n  const size = Number(o.Size ?? o.ContentLength ?? -1);\n  const s3Time = Math.floor(new Date(o.LastModified).getTime() / 1000);\n  const loc = local.get(rel);\n  let reason;\n  if (!loc) { reason = 'новый'; missing++; }\n  else if (size >= 0 && loc.size !== size) { reason = `размер ${loc.size}→${size}`; changed++; }\n  else if (s3Time > loc.mtime) { reason = 'обновлён в S3'; changed++; }\n  else { same++; continue; }\n  const local_path = `${localDir}/${rel}`;\n  const local_dir_parent = local_path.slice(0, local_path.lastIndexOf('/'));\n  out.push({ Key: key, rel, size, reason, local_path, local_dir_parent });\n}\n\nconst stats = { s3_total: s3.length, local_total: local.size, same, missing, changed, skipped,\n  to_download: out.length, dry_run: dryRun, prefix, local_dir: localDir };\n\nif (dryRun || out.length === 0) {\n  return [{ json: { nothing: true, stats, plan: out.map(o => `${o.reason}: ${o.rel}`) } }];\n}\nreturn out.map(o => ({ json: { ...o, stats } }));"
+      }
+    },
+    {
+      "id": "n-if",
+      "name": "Есть что качать?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1100, 0],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose", "version": 2 },
+          "conditions": [
+            { "id": "i1", "leftValue": "={{ $json.nothing }}", "rightValue": true, "operator": { "type": "boolean", "operation": "notEquals" } }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "n-mkdir",
+      "name": "Создать папку",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1320, -120],
+      "parameters": {
+        "command": "=mkdir -p '{{ $json.local_dir_parent.replace(/'/g, \"'\\\\''\") }}'"
+      }
+    },
+    {
+      "id": "n-s3get",
+      "name": "S3 · Скачать",
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [1540, -120],
+      "parameters": {
+        "bucketName": "={{ $('Конфиг').first().json.s3_bucket }}",
+        "fileKey": "={{ $('Сравнение').item.json.Key }}"
+      },
+      "credentials": { "s3": { "id": "BSr0GYMWTTlMKEH1", "name": "S3Beget" } }
+    },
+    {
+      "id": "n-write",
+      "name": "Запись файла",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [1760, -120],
+      "parameters": {
+        "operation": "write",
+        "fileName": "={{ $('Сравнение').item.json.local_path }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "n-summary",
+      "name": "Итог",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 0],
+      "parameters": {
+        "jsCode": "const first = $('Сравнение').first().json;\nconst stats = first.stats || {};\nlet written = 0;\ntry { written = $('Запись файла').all().length; } catch (e) { written = 0; }\nconst lines = [\n  `S3 «${stats.prefix}» → ${stats.local_dir}`,\n  `В S3: ${stats.s3_total} · локально: ${stats.local_total} · без изменений: ${stats.same} · пропущено: ${stats.skipped}`,\n  `Новых: ${stats.missing} · изменённых: ${stats.changed} · к загрузке: ${stats.to_download}`,\n  stats.dry_run ? '⚠️ РЕЖИМ ПРОВЕРКИ (dry_run = true) — ничего не скачано' : `✅ Скачано и записано: ${written}`,\n];\nconst plan = Array.isArray(first.plan) ? first.plan : [];\nif (plan.length) lines.push('', ...plan.slice(0, 80));\nif (plan.length > 80) lines.push(`… ещё ${plan.length - 80}`);\nreturn [{ json: { ok: true, written, stats, plan, message: lines.join('\\n') } }];"
+      }
+    }
+  ],
+  "connections": {
+    "Запуск по кнопке": { "main": [[{ "node": "Конфиг", "type": "main", "index": 0 }]] },
+    "Конфиг": { "main": [[{ "node": "S3 · Список файлов", "type": "main", "index": 0 }]] },
+    "S3 · Список файлов": { "main": [[{ "node": "Локальные файлы", "type": "main", "index": 0 }]] },
+    "Локальные файлы": { "main": [[{ "node": "Сравнение", "type": "main", "index": 0 }]] },
+    "Сравнение": { "main": [[{ "node": "Есть что качать?", "type": "main", "index": 0 }]] },
+    "Есть что качать?": {
+      "main": [
+        [{ "node": "Создать папку", "type": "main", "index": 0 }],
+        [{ "node": "Итог", "type": "main", "index": 0 }]
+      ]
+    },
+    "Создать папку": { "main": [[{ "node": "S3 · Скачать", "type": "main", "index": 0 }]] },
+    "S3 · Скачать": { "main": [[{ "node": "Запись файла", "type": "main", "index": 0 }]] },
+    "Запись файла": { "main": [[{ "node": "Итог", "type": "main", "index": 0 }]] }
+  }
+}

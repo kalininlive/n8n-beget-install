@@ -1,0 +1,1822 @@
+{
+  "name": "56 🎠 [КАРУСЕЛЬ] МОЙ МАСКОТ • HTML-карусели на Autopilot GENESIS",
+  "nodes": [
+    {
+      "id": "2f1b7c08-82b0-4e61-a397-f02777f964d0",
+      "position": [
+        -1200,
+        -420
+      ],
+      "name": "Как это работает",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "parameters": {
+        "width": 1180,
+        "height": 320,
+        "content": "## 🎠 Карусель с маскотом — HTML → PNG (по аналогии с «55 🎬 МОЙ МАСКОТ»)\nВход из «1 START GENESIS» (статус `MCAROUSEL_TEXT` — готовый текст, `MCAROUSEL_LLM` — тема): `chat_id`, `text`, `status`.\n**Цепочка:** Исследователь (Jina/Brave/Supabase) → Судья → Копирайтер | Адаптер готового текста → Парсинг → Арт-директор (стиль из 4, позы, стикеры) → **Сборка HTML** (шаблоны стилей вшиты в Code-ноду) → запись `slide_NN.html` в `/data/carousel/jobs/<runId>/` → `/opt/shims/render-html` (Chromium в n8n-media-render) → PNG → S3 (`carousel/<runId>/`) → альбом в Telegram → очистка.\n**Ассеты** (общие с маскотом, синхронизируются из S3 воркфлоу «🔄 Синхронизация ассетов»): персонаж `/data/studio-engine/public/assets/characters/genesis/`, стикеры `…/stickers/`, аватар `…/author/websansay.png`, шрифты `…/public/fonts/fonts.css`.\n**Стили и шаблоны** правятся в ноде «Сборка HTML» (константы AUTHOR/… вверху), промпты — в LLM-нодах. На сервере только движок. Док: n8n-beget-install/ENGINES.md."
+      }
+    },
+    {
+      "id": "8bc4a26b-0312-4aad-b1a5-32bc2eb789b4",
+      "position": [
+        -1200,
+        0
+      ],
+      "name": "INPUT",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "text"
+            },
+            {
+              "name": "chat_id"
+            },
+            {
+              "name": "status"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "19767732-66a2-4656-9b72-879497f37667",
+      "position": [
+        -980,
+        0
+      ],
+      "name": "Конфиг",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "k1",
+              "name": "s3_url",
+              "value": "https://s3.ru1.storage.beget.cloud",
+              "type": "string"
+            },
+            {
+              "id": "k2",
+              "name": "s3_bucket",
+              "value": "e02faa1b8ed3-ugcws",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "8a7a9000-a971-4336-9e62-2d22ba33d3e4",
+      "position": [
+        -760,
+        0
+      ],
+      "name": "Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "0857d052-3999-44e2-b8ee-47a31d0134fc",
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "MCAROUSEL_LLM",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "MCAROUSEL_LLM"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "69afe03c-8d4e-46d5-ba7a-3259155f75b2",
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "MCAROUSEL_TEXT",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "MCAROUSEL_TEXT"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "6ae6f6ad-baef-4a0c-bd4e-61e0c6999f82",
+      "position": [
+        -520,
+        -200
+      ],
+      "name": "AI-Исследователь и 5 Хуков",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.text }}",
+        "options": {
+          "systemMessage": "=Ты — ведущий вирусный исследователь и креатор каруселей студии ДЖЕНЕСИС (маскот студии WebSansay).\nТвоя миссия: превратить входящую тему/идею в 5 мощнейших вариантов ХУКА — заголовка ОБЛОЖКИ карусели 4:5 (первый слайд решает, листнут ли дальше).\n\nВХОДЯЩАЯ ТЕМА / ЗАПРОС:\n{{ $json.text }}\n\nТВОЙ АЛГОРИТМ РАБОТЫ (СТРОГО):\n1. ИССЛЕДОВАНИЕ (Используй доступные инструменты):\n   - Если тема касается компании WebSansay, сервисов (Google AI PRO, GENESIS AI, Звонилка РФ, ProxyLeads, Telegram-ботов, Авито-бота), тарифов, цен, скидок или условий:\n     -> ОБЯЗАТЕЛЬНО обратись к инструменту \"Supabase Vector Store\", найди точные цифры, офферы и факты.\n   - Если тема касается свежих ИИ-инструментов, новостей, трендов или обновлений (n8n, OpenAI, Claude, DeepSeek, Google):\n     -> ОБЯЗАТЕЛЬНО используй поиск в интернете (\"Jina AI\"), чтобы найти актуальные факты и свежие детали.\n\n2. ГЕНЕРАЦИЯ 5 ХУКОВ ДЛЯ ОБЛОЖКИ (заголовок до 9 слов, читается за 1.5 секунды, без кликбейта-обмана):\n   - ХУК 1 (Разрушение мифа / Жесткий негатив): «перестань делать X руками…», «ты сливаешь бюджет, если до сих пор…»\n   - ХУК 2 (Шок-цифра / Контраст): конкретная цифра экономии времени или денег\n   - ХУК 3 (Инсайд / Скрытая фича): секрет, который мало кто знает\n   - ХУК 4 (Острая боль / Вопрос-триггер): вопрос, бьющий в нерв\n   - ХУК 5 (Список / Обещание пользы): «5 правил…», «7 ошибок…», «чек-лист…» — карусель любит структуру\n\nФОРМАТ ВЫДАЧИ (СТРОГО):\nТема: [Краткая суть темы]\nКлючевые факты: [3-5 конкретных фактов из базы знаний или поиска — они пойдут в слайды]\nБоль читателя: [В чем главная боль целевой аудитории]\n\nХУК 1 (Негатив/Миф): [Текст хука]\nХУК 2 (Шок-цифра): [Текст хука]\nХУК 3 (Инсайд): [Текст хука]\nХУК 4 (Боль): [Текст хука]\nХУК 5 (Список): [Текст хука]"
+        }
+      }
+    },
+    {
+      "id": "72258fc8-0653-4b0f-bfd3-c3d8302764ea",
+      "position": [
+        -140,
+        -200
+      ],
+      "name": "AI-Судья: Выбор лучшего хука",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "parameters": {
+        "promptType": "define",
+        "text": "=Ты — Главный продюсер и Chief Retention Officer студии ДЖЕНЕСИС.\nТвоя задача — объективно оценить 5 предложенных хуков для ОБЛОЖКИ карусели и выбрать ОДИН САМЫЙ СИЛЬНЫЙ ХУК-ПОБЕДИТЕЛЬ.\n\nДАННЫЕ ОТ ИССЛЕДОВАТЕЛЯ:\n{{ $json.output || $json.text }}\n\nКРИТЕРИИ ОЦЕНКИ:\n1. Захват внимания: остановит ли скролл за полторы секунды?\n2. Обещание без обмана: карусель реально раскроет это за 5-8 слайдов?\n3. Соответствие персоне ДЖЕНЕСИС: энергичный, уверенный tech-эксперт, говорит от 1-го лица.\n4. Триггер любопытства или острой выгоды, желание сохранить пост.\n\nТВОЙ ВЕРДИКТ (СТРОГО В ТАКОМ ФОРМАТЕ):\nПОБЕДИТЕЛЬ: [Текст лучшего хука]\nТИП ХУКА: [Название формулы]\nПОЧЕМУ ОН: [Одно предложение почему этот хук даст максимум сохранений]\nСТРУКТУРА КАРУСЕЛИ: [3-7 пунктов, которые раскроют хук по слайдам]\nКЛЮЧЕВЫЕ ФАКТЫ: [Факты исследователя, которые обязательно должны попасть в слайды]\nCTA: [Кодовое слово для Директа/комментов]"
+      }
+    },
+    {
+      "id": "f4517a7b-ff8e-4321-baeb-8bc17d7950e9",
+      "position": [
+        200,
+        -200
+      ],
+      "name": "AI-Копирайтер каруселей",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "parameters": {
+        "promptType": "define",
+        "text": "=Ты — ведущий AI-копирайтер каруселей маскота ДЖЕНЕСИС студии WebSansay.\nТвоя задача: взять утверждённый хук-победитель и превратить его в карусель 4:5 для Instagram / Telegram / VK (5-9 слайдов: обложка, 3-7 смысловых слайдов, финал с CTA) + готовое SEO-описание поста.\n\nИСХОДНАЯ ТЕМА:\n{{ $('Type').first().json.text }}\n\nВЕРДИКТ РЕДАКЦИИ И ХУК-ПОБЕДИТЕЛЬ:\n{{ $json.text }}\n\nПРИНЦИПЫ:\n1. Обложка = хук-победитель (можно слегка сократить), subtext — что получит читатель.\n2. Каждый смысловой слайд — одна мысль, конкретика, цифры и факты из вердикта. Никакой «воды».\n3. Финал — призыв сохранить и написать кодовое слово из вердикта.\n\nФОРМАТ ОТВЕТА — СТРОГО JSON-ОБЪЕКТ (без markdown, без комментариев):\n{\n  \"title\": \"5 ПРИВЫЧЕК РАБОТЫ С ИИ\",\n  \"series\": \"ЛИЧНЫЙ ОПЫТ\",\n  \"badge_icon\": \"🔥\",\n  \"cover\": {\n    \"headline\": \"У большинства ИИ экономит 2 часа в неделю. У меня — 5 часов в день\",\n    \"accent\": \"У меня — 5 часов в день\",\n    \"subtext\": \"Разница не в модели, а в привычках. Показываю свои 5 правил.\",\n    \"stat\": { \"value\": \"5+\", \"desc\": \"часов в день освобождает этот набор правил\" }\n  },\n  \"points\": [\n    { \"number\": \"1\", \"headline\": \"БАНК ПРОМПТОВ С ТЕГАМИ\", \"items\": [\"Каждый рабочий промпт сохраняю с тегом задачи\", \"Новую задачу начинаю с поиска по банку\", \"Раз в неделю чищу то, что перестало работать\"], \"body\": \"Один абзац той же мысли для стилей без списков.\" }\n  ],\n  \"outro\": {\n    \"headline\": \"Сохрани, чтобы не потерять. И напиши СТАРТ в директ\",\n    \"accent\": \"СТАРТ\",\n    \"body\": \"Заберёшь готовый шаблон связки и чек-лист.\",\n    \"items\": [\"Шаблон n8n\", \"Чек-лист приёмки\"]\n  },\n  \"post_caption\": \"🚀 SEO-ЗАГОЛОВОК ПОСТА\\n\\nХук + польза + призыв написать кодовое слово.\\n\\n#нейросети #автоматизация #n8n #ai #бизнес\"\n}\n\nЖЁСТКИЕ ПРАВИЛА ПОЛЕЙ:\n- points: от 3 до 7 слайдов. В каждом: headline до 5 слов КАПСОМ, items — 2-4 коротких тезиса (до 90 символов каждый), body — 1-2 предложения той же мысли.\n- cover.headline до 14 слов; cover.accent — ТОЧНАЯ подстрока из cover.headline (для цветового выделения). cover.stat можно null.\n- outro.accent — точная подстрока из outro.headline.\n- series — рубрика 1-2 слова КАПСОМ (ЛИЧНЫЙ ОПЫТ, ХАК ДНЯ, КЕЙС, AI ИНСТРУМЕНТЫ, ЧЕК-ЛИСТ). badge_icon — один эмодзи.\n- post_caption до 800 символов, БЕЗ markdown-разметки (никаких * _ ` [ ]), ровно 5 хэштегов в конце.\n- Персона ДЖЕНЕСИС говорит от 1-го лица ед. числа («я настроил», «я покажу»), к читателю на «ты». Бренды на английском: n8n, Claude Code, ChatGPT, Telegram, Notion, Python, Docker, Supabase.\n- Никаких кавычек-ёлочек внутри строк JSON не экранируй руками — просто валидный JSON."
+      }
+    },
+    {
+      "id": "d897fd84-6a3b-4199-83d0-08f1aa3e1a27",
+      "position": [
+        -140,
+        200
+      ],
+      "name": "AI-Адаптер готового текста",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "parameters": {
+        "promptType": "define",
+        "text": "=Ты — редактор-верстальщик каруселей студии ДЖЕНЕСИС.\nПользователь передал ГОТОВЫЙ АВТОРСКИЙ ТЕКСТ.\n\nВХОДЯЩИЙ АВТОРСКИЙ ТЕКСТ:\n{{ $json.text }}\n\nЖЕЛЕЗНЫЙ ЗАКОН:\nНЕ ПРИДУМЫВАЙ НОВЫЕ ФАКТЫ, НЕ ДОПИСЫВАЙ СВОИ МЫСЛИ И НЕ МЕНЯЙ СМЫСЛ АВТОРА!\nТвоя задача — разложить авторский текст на слайды карусели 4:5: обложка (хук — самая сильная мысль текста), 3-7 смысловых слайдов (по одной мысли, тезисы — фразы автора, максимум слегка сокращённые), финал с призывом. Если в тексте есть кодовое слово / CTA — используй его; если нет — «Сохрани себе».\n\nФОРМАТ ОТВЕТА — СТРОГО JSON-ОБЪЕКТ (без markdown, без комментариев):\n{\n  \"title\": \"5 ПРИВЫЧЕК РАБОТЫ С ИИ\",\n  \"series\": \"ЛИЧНЫЙ ОПЫТ\",\n  \"badge_icon\": \"🔥\",\n  \"cover\": {\n    \"headline\": \"У большинства ИИ экономит 2 часа в неделю. У меня — 5 часов в день\",\n    \"accent\": \"У меня — 5 часов в день\",\n    \"subtext\": \"Разница не в модели, а в привычках. Показываю свои 5 правил.\",\n    \"stat\": { \"value\": \"5+\", \"desc\": \"часов в день освобождает этот набор правил\" }\n  },\n  \"points\": [\n    { \"number\": \"1\", \"headline\": \"БАНК ПРОМПТОВ С ТЕГАМИ\", \"items\": [\"Каждый рабочий промпт сохраняю с тегом задачи\", \"Новую задачу начинаю с поиска по банку\", \"Раз в неделю чищу то, что перестало работать\"], \"body\": \"Один абзац той же мысли для стилей без списков.\" }\n  ],\n  \"outro\": {\n    \"headline\": \"Сохрани, чтобы не потерять. И напиши СТАРТ в директ\",\n    \"accent\": \"СТАРТ\",\n    \"body\": \"Заберёшь готовый шаблон связки и чек-лист.\",\n    \"items\": [\"Шаблон n8n\", \"Чек-лист приёмки\"]\n  },\n  \"post_caption\": \"🚀 SEO-ЗАГОЛОВОК ПОСТА\\n\\nХук + польза + призыв написать кодовое слово.\\n\\n#нейросети #автоматизация #n8n #ai #бизнес\"\n}\n\nЖЁСТКИЕ ПРАВИЛА ПОЛЕЙ:\n- points: от 3 до 7 слайдов. В каждом: headline до 5 слов КАПСОМ, items — 2-4 коротких тезиса (до 90 символов каждый), body — 1-2 предложения той же мысли.\n- cover.headline до 14 слов; cover.accent — ТОЧНАЯ подстрока из cover.headline (для цветового выделения). cover.stat можно null.\n- outro.accent — точная подстрока из outro.headline.\n- series — рубрика 1-2 слова КАПСОМ (ЛИЧНЫЙ ОПЫТ, ХАК ДНЯ, КЕЙС, AI ИНСТРУМЕНТЫ, ЧЕК-ЛИСТ). badge_icon — один эмодзи.\n- post_caption до 800 символов, БЕЗ markdown-разметки (никаких * _ ` [ ]), ровно 5 хэштегов в конце.\n- Персона ДЖЕНЕСИС говорит от 1-го лица ед. числа («я настроил», «я покажу»), к читателю на «ты». Бренды на английском: n8n, Claude Code, ChatGPT, Telegram, Notion, Python, Docker, Supabase.\n- Никаких кавычек-ёлочек внутри строк JSON не экранируй руками — просто валидный JSON."
+      }
+    },
+    {
+      "id": "b8956036-f894-41bb-85b8-21bcd200e949",
+      "position": [
+        -300,
+        60
+      ],
+      "name": "OpenAI Model (Копирайтер)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini",
+          "cachedResultName": "GPT-5 mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "maxTokens": 8000,
+          "reasoningEffort": "low"
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "G5xWBVZX9ljUH2yh",
+          "name": "New OpenAi acc 🔥 FREE Query"
+        }
+      }
+    },
+    {
+      "id": "78cd05f3-4dfd-4abc-a7b0-3fae6c54004a",
+      "position": [
+        -560,
+        40
+      ],
+      "name": "Jina AI Search",
+      "type": "n8n-nodes-base.jinaAiTool",
+      "typeVersion": 1,
+      "parameters": {
+        "resource": "reader",
+        "operation": "search",
+        "searchQuery": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('searchQuery', 'Поисковый запрос в интернет', 'string') }}",
+        "toolDescription": "Поиск актуальной информации в интернете в реальном времени. Используй для поиска свежих новостей, фактов, инструментов и технологий."
+      },
+      "credentials": {
+        "jinaAiApi": {
+          "id": "Uon36lYpuvW6CtQu",
+          "name": "Jina AI"
+        }
+      }
+    },
+    {
+      "id": "b2966ebc-e60d-42cc-9076-7cf63d60be0f",
+      "position": [
+        -440,
+        40
+      ],
+      "name": "Brave Search",
+      "type": "@brave/n8n-nodes-brave-search.braveSearchTool",
+      "typeVersion": 1,
+      "parameters": {
+        "query": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('query', 'Поисковый запрос', 'string') }}",
+        "additionalParameters": {}
+      },
+      "credentials": {
+        "braveSearchApi": {
+          "id": "wqjYi5e38A0rfcvO",
+          "name": "Brave Search account"
+        }
+      }
+    },
+    {
+      "id": "5ac8671e-aaf7-411d-a8bf-4c8b3ec057b9",
+      "position": [
+        -700,
+        40
+      ],
+      "name": "Supabase Vector Store",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1.1,
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolName": "supabase_knowledge_base",
+        "toolDescription": "Главная база знаний WebSansay. Используй для поиска любой информации о компании, продуктах и услугах: Google AI PRO (подписка на 18 месяцев за 990 ₽), GENESIS AI (тарифы САМ, ПРО, ВИП), Звонилка РФ (голосовой ИИ), ProxyLeads, Авито-бот, Telegram-ассистент, автоматизации, цены, ссылки, способы оплаты, гарантии, сроки запуска и техподдержка. Всегда обращайся сюда, если вопрос касается продуктов, цен, условий или ссылок.",
+        "tableName": {
+          "__rl": true,
+          "value": "documents",
+          "mode": "list",
+          "cachedResultName": "documents"
+        },
+        "topK": 8,
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "6mRhOCbbaNJhp3YL",
+          "name": "Supabase MY DB"
+        }
+      }
+    },
+    {
+      "id": "175d3377-2ca4-4648-a695-da8a100f0d7b",
+      "position": [
+        -700,
+        200
+      ],
+      "name": "Embeddings OpenAI",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "parameters": {
+        "options": {}
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "G5xWBVZX9ljUH2yh",
+          "name": "New OpenAi acc 🔥 FREE Query"
+        }
+      }
+    },
+    {
+      "id": "3a942965-479c-4654-9071-b64dab75ae95",
+      "position": [
+        540,
+        0
+      ],
+      "name": "Парсинг и валидация сценария",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Разбор JSON копирайтера/адаптера с ремонтом типичных обрывов (как в маскоте)\nlet raw = String($input.first().json.text || $input.first().json.output || '').trim();\nraw = raw.replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/i, '').trim();\nconst a = raw.indexOf('{'), b = raw.lastIndexOf('}');\nif (a !== -1 && b > a) raw = raw.slice(a, b + 1);\nlet parsed;\ntry { parsed = JSON.parse(raw); }\ncatch (e) {\n  try {\n    let r = raw; const q = (r.match(/\"/g) || []).length; if (q % 2 !== 0) r += '\"';\n    if (!r.endsWith('}')) r += ']}'.slice(r.includes('[') && !r.includes(']}') ? 0 : 1);\n    parsed = JSON.parse(r);\n  } catch (e2) { throw new Error('Копирайтер вернул невалидный JSON: ' + raw.slice(0, 300)); }\n}\nconst clean = (s) => String(s ?? '').replace(/\\s+/g, ' ').trim();\nconst points = (Array.isArray(parsed.points) ? parsed.points : []).filter(p => p && (p.headline || p.body || (p.items || []).length)).slice(0, 7)\n  .map((p, i) => ({ number: clean(p.number || String(i + 1)), headline: clean(p.headline || ''), items: (Array.isArray(p.items) ? p.items : []).map(clean).filter(Boolean).slice(0, 4), body: clean(p.body || '') }));\nif (points.length < 2) throw new Error('Копирайтер вернул меньше 2 смысловых слайдов');\nconst cover = parsed.cover || {};\nconst outro = parsed.outro || {};\nreturn [{ json: {\n  title: clean(parsed.title || cover.headline || 'КАРУСЕЛЬ'),\n  series: clean(parsed.series || 'ЛИЧНЫЙ ОПЫТ').toUpperCase().slice(0, 24),\n  badge_icon: clean(parsed.badge_icon || '🔥').slice(0, 4),\n  cover: { headline: clean(cover.headline || parsed.title || ''), accent: clean(cover.accent || ''), subtext: clean(cover.subtext || ''), stat: cover.stat && cover.stat.value ? { value: clean(cover.stat.value), desc: clean(cover.stat.desc) } : null },\n  points,\n  outro: { headline: clean(outro.headline || 'Сохрани себе'), accent: clean(outro.accent || ''), body: clean(outro.body || ''), items: (Array.isArray(outro.items) ? outro.items : []).map(clean).filter(Boolean).slice(0, 4) },\n  post_caption: clean(parsed.post_caption || '').replace(/[*_`\\[\\]]/g, '').slice(0, 900),\n  slides_planned: points.length + 2,\n} }];"
+      }
+    },
+    {
+      "id": "61225a17-469d-43a3-a7a0-4c19e0626c73",
+      "position": [
+        760,
+        0
+      ],
+      "name": "AI-Арт-директор",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "parameters": {
+        "promptType": "define",
+        "text": "=Ты — Арт-директор студии ДЖЕНЕСИС. Подбери визуальное оформление карусели под её содержание.\n\nКАРУСЕЛЬ:\n- Заголовок: {{ $json.title }}\n- Рубрика: {{ $json.series }}\n- Обложка: {{ $json.cover.headline }}\n- Слайды: {{ JSON.stringify(($json.points || []).map((p, i) => ({ slide: i + 2, headline: p.headline }))) }}\n- Финал: {{ $json.outro.headline }}\n\n1. СТИЛЬ (ровно один):\n- style-1-grid-cards — тёмный фон + оранжевый акцент, карточки-тезисы. Универсальный: tech, автоматизация, кейсы, списки правил.\n- style-2-bold-block — красный/чёрный, огромная типографика, один абзац на слайд. Манифесты, провокация, жёсткие тезисы.\n- style-3-editorial — чёрный/кремовый, курсивный акцент, спокойные абзацы. Разборы, инсайды, «секреты», экспертные лонгриды.\n- style-4-friendly-cream — кремовый, скруглённый шрифт, иконки. Дружелюбные советы, обучение, привычки, начинающим.\n\n2. ПОЗА МАСКОТА ДЖЕНЕСИС (обложка и финал), ровно из списка:\ndefault, explaining, pointing, pointing_down_caption, call_to_action, stop_warning_hand, boom_brain_explosion, coding_laptop, chatbot, facepalm, surprised, money, n8n_nodes_builder, shushing_secret_insight, mindblown_shock.\nОбложка: эмоция хука (боль/шок → stop_warning_hand, boom_brain_explosion, facepalm; инсайд → shushing_secret_insight; список/польза → pointing, explaining). Финал: call_to_action или pointing_down_caption.\n\n3. СТИКЕРЫ — 3D-иконки для 1-3 смысловых слайдов (НЕ на обложку и НЕ на финал, не на каждый слайд). Имя файла без .png из каталога:\nai_brain_3d, alarm_clock_ringing_2d, chart_bar_rocket_3d, checklist_done_3d, checklist_pass_3d, fire_eyes_3d, fire_trend_3d, five_stars_3d, money_bag_3d, n8n_3d, n8n_master_hub_3d, n8n_node_code_3d, n8n_node_httprequest_3d, n8n_node_if_3d, n8n_node_openai_3d, n8n_node_postgres_3d, n8n_node_set_3d, n8n_node_supabase_3d, n8n_node_switch_3d.\nСтикер должен быть по смыслу слайда (деньги → money_bag_3d, скорость → alarm_clock_ringing_2d, чек-лист → checklist_done_3d, n8n → n8n_3d, идея/мозг → ai_brain_3d, рост → chart_bar_rocket_3d).\n\n4. ИКОНКИ для style-4 (только если выбран он): для каждого смыслового слайда одна из: idea, target, money, chart, rocket, check.\n\nФОРМАТ ВЫДАЧИ — СТРОГО JSON-ОБЪЕКТ:\n{\n  \"style\": \"style-1-grid-cards\",\n  \"cover_pose\": \"pointing\",\n  \"outro_pose\": \"call_to_action\",\n  \"stickers\": [ { \"slide\": 3, \"name\": \"n8n_3d\" }, { \"slide\": 5, \"name\": \"checklist_done_3d\" } ],\n  \"icons\": { \"2\": \"idea\", \"3\": \"target\", \"4\": \"check\" }\n}"
+      }
+    },
+    {
+      "id": "fc744298-5310-4968-b601-aa3fd939a0bf",
+      "position": [
+        760,
+        220
+      ],
+      "name": "OpenAI Model (Арт-директор)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini",
+          "cachedResultName": "GPT-5 mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "maxTokens": 8000,
+          "reasoningEffort": "low"
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "G5xWBVZX9ljUH2yh",
+          "name": "New OpenAi acc 🔥 FREE Query"
+        }
+      }
+    },
+    {
+      "id": "bc351806-9ed3-4aa1-911c-6681b0c80743",
+      "position": [
+        1100,
+        0
+      ],
+      "name": "Сборка HTML и команда рендера",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// ============================================================================\n// Сборка HTML-слайдов карусели из JSON копирайтера + решений арт-директора.\n// Живёт в Code-ноде воркфлоу «56 🎠 [КАРУСЕЛЬ] МОЙ МАСКОТ». Источник: moy-n8n/workflows/src/mcarousel-build-html.js\n// (сборщик scripts/build-mcarousel-wf.mjs вшивает сюда шаблоны стилей из carusel_dayly_agent).\n//\n// Вход:  $('Парсинг и валидация сценария').first().json — контент (title, series, cover, points[], outro, post_caption)\n//        $input.first().json.text — ответ арт-директора (JSON: style, cover_pose, outro_pose, stickers[], icons{})\n// Выход: по одному item на слайд с binary `data` (HTML) + общие поля: runId, jobDir, renderCommand, cleanupCommand, caption\n// ============================================================================\n\n// ---------- НАСТРОЙКИ (единственное, что обычно правят) ----------\nconst AUTHOR = {\n  name: 'КОЛЯ WEBSANSAY',\n  role: 'ИИ контент-завод',\n  handle: '@websansay',\n  avatar: 'file:///data/studio-engine/public/assets/author/websansay.png',\n};\nconst ASSETS = 'file:///data/studio-engine/public/assets';          // общие ассеты с маскотом (синхронизируются из S3)\nconst FONTS_CSS = 'file:///data/studio-engine/public/fonts/fonts.css';\nconst JOBS_DIR = '/data/carousel/jobs';                              // общий том n8n ↔ n8n-media-render\nconst RENDER_SHIM = '/opt/shims/render-html';\nconst MAX_SLIDES = 10;                                               // лимит альбома Telegram\nconst CTA_NEXT = 'Листай дальше →';\nconst CTA_LAST = 'Сохрани себе';\nconst DEFAULT_STYLE = 'style-1-grid-cards';\nconst POSES = ['default', 'explaining', 'pointing', 'pointing_down_caption', 'call_to_action', 'stop_warning_hand',\n  'boom_brain_explosion', 'coding_laptop', 'chatbot', 'facepalm', 'surprised', 'money', 'n8n_nodes_builder',\n  'shushing_secret_insight', 'mindblown_shock'];\n\n// ---------- ВШИТЫЕ РЕСУРСЫ (генерируются сборщиком, руками не править) ----------\nconst ZONES_CSS = \"/* =====================================================================\\n   ЗОНИРОВАНИЕ СЛАЙДА 1080x1350 — общее для ВСЕХ стилей.\\n   Слайд условно делится на 3 части (сверху вниз):\\n\\n     ┌──────────────────────────┐  ← --z-pad-top (72px)\\n     │  HEADER   88px           │  рубрика / бейдж слева, счётчик 01/08 справа\\n     ├──────────────────────────┤  ← --z-gap (40px)\\n     │                          │\\n     │  MAIN     942px          │  весь контент слайда; центрируется по\\n     │                          │  вертикали внутри зоны (.zone-main.top —\\n     │                          │  прижать к верху)\\n     ├──────────────────────────┤  ← --z-gap (40px)\\n     │  FOOTER   96px           │  автор (аватар + хэндл) слева, CTA справа\\n     └──────────────────────────┘  ← --z-pad-bottom (72px)\\n\\n   72 + 88 + 40 + 942 + 40 + 96 + 72 = 1350.\\n   Стили НЕ переопределяют геометрию зон — только наполнение и цвета.\\n   Отладка: node scripts/generate.mjs <slug> --debug → зоны обводятся красным.\\n   ===================================================================== */\\n\\n:root {\\n  --z-pad-x: 90px;\\n  --z-pad-top: 72px;\\n  --z-pad-bottom: 72px;\\n  --z-header-h: 88px;\\n  --z-footer-h: 96px;\\n  --z-gap: 40px;\\n  --z-main-h: 942px;\\n}\\n\\n* { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }\\n\\nbody.slide {\\n  width: 1080px; height: 1350px; overflow: hidden; position: relative;\\n  display: grid;\\n  grid-template-rows: var(--z-header-h) var(--z-main-h) var(--z-footer-h);\\n  grid-template-areas: \\\"header\\\" \\\"main\\\" \\\"footer\\\";\\n  row-gap: var(--z-gap);\\n  padding: var(--z-pad-top) var(--z-pad-x) var(--z-pad-bottom);\\n}\\n\\n/* --- HEADER ---------------------------------------------------------- */\\n.zone-header {\\n  grid-area: header;\\n  display: flex; align-items: center; justify-content: space-between; gap: 24px;\\n  min-width: 0;\\n}\\n.zone-header .z-label {\\n  display: inline-flex; align-items: center; gap: 10px;\\n  font-size: 22px; font-weight: 700; line-height: 1;\\n  letter-spacing: 0.06em; text-transform: uppercase;\\n  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;\\n}\\n.zone-header .z-counter {\\n  font-size: 22px; font-weight: 600; line-height: 1;\\n  letter-spacing: 0.04em; font-variant-numeric: tabular-nums;\\n  opacity: 0.6; flex-shrink: 0;\\n}\\n\\n/* --- MAIN ------------------------------------------------------------ */\\n.zone-main {\\n  grid-area: main;\\n  display: flex; flex-direction: column; justify-content: center;\\n  min-height: 0; position: relative;\\n}\\n.zone-main.top { justify-content: flex-start; }\\n.zone-main.center-x { align-items: center; text-align: center; }\\n\\n/* --- FOOTER ---------------------------------------------------------- */\\n.zone-footer {\\n  grid-area: footer;\\n  display: flex; align-items: center; justify-content: space-between; gap: 24px;\\n  border-top: 1px solid var(--z-footer-line, rgba(128,128,128,0.25));\\n  padding-top: 22px;\\n}\\n.zone-footer .z-author { display: flex; align-items: center; gap: 14px; min-width: 0; }\\n.zone-footer .z-avatar {\\n  width: 52px; height: 52px; border-radius: 50%; object-fit: cover; flex-shrink: 0;\\n  border: 2px solid var(--z-avatar-ring, rgba(128,128,128,0.3));\\n}\\n.zone-footer .z-handle { font-size: 24px; font-weight: 700; line-height: 1; white-space: nowrap; }\\n.zone-footer .z-sub { font-size: 20px; font-weight: 400; line-height: 1.2; opacity: 0.65; margin-top: 6px; }\\n.zone-footer .z-cta { font-size: 24px; font-weight: 700; line-height: 1; white-space: nowrap; flex-shrink: 0; }\\n\\n/* --- DEBUG: обводка зон ---------------------------------------------- */\\nbody.debug-zones .zone-header,\\nbody.debug-zones .zone-main,\\nbody.debug-zones .zone-footer {\\n  outline: 3px dashed rgba(255, 40, 40, 0.9); outline-offset: -3px;\\n}\\nbody.debug-zones .zone-header::after,\\nbody.debug-zones .zone-main::after,\\nbody.debug-zones .zone-footer::after {\\n  position: absolute; right: 6px; top: 6px; font: 700 14px/1 monospace;\\n  color: #fff; background: rgba(255,40,40,0.9); padding: 4px 8px; border-radius: 4px;\\n  pointer-events: none;\\n}\\nbody.debug-zones .zone-header, body.debug-zones .zone-footer { position: relative; }\\nbody.debug-zones .zone-header::after { content: 'HEADER 88'; }\\nbody.debug-zones .zone-main::after   { content: 'MAIN 942'; }\\nbody.debug-zones .zone-footer::after { content: 'FOOTER 96'; }\\n\";\nconst STYLES = {\"style-1-grid-cards\":{\"theme\":{\"colors\":{\"bg\":\"#0A0A0C\",\"bgLight\":\"#F4EEE3\",\"cardBg\":\"#16181C\",\"cardBorder\":\"rgba(255,255,255,0.05)\",\"accent\":\"#FF5A2E\",\"accentSoft\":\"rgba(255,90,46,0.14)\",\"accentBorder\":\"rgba(255,90,46,0.35)\",\"highlight\":\"#FFD93D\",\"textPrimary\":\"#FFFFFF\",\"textPrimaryDark\":\"#15130F\",\"textSecondary\":\"#9B9B9F\",\"textSecondaryDark\":\"#5B5750\"},\"fonts\":{\"display\":\"Manrope\",\"body\":\"Inter\"}},\"slides\":{\"cover\":\"<!DOCTYPE html>\\n<html lang=\\\"ru\\\">\\n<head>\\n<meta charset=\\\"UTF-8\\\">\\n<meta name=\\\"viewport\\\" content=\\\"width=1080, height=1350, initial-scale=1.0\\\">\\n<title>cover</title>\\n<link rel=\\\"stylesheet\\\" href=\\\"../../assets/fonts/fonts.css\\\">\\n<link rel=\\\"stylesheet\\\" href=\\\"../../styles/_zones.css\\\">\\n<style>\\n  :root {\\n    --bg: {{colors.bg}};\\n    --bg-light: {{colors.bgLight}};\\n    --card-bg: {{colors.cardBg}};\\n    --card-border: {{colors.cardBorder}};\\n    --accent: {{colors.accent}};\\n    --accent-soft: {{colors.accentSoft}};\\n    --accent-border: {{colors.accentBorder}};\\n    --highlight: {{colors.highlight}};\\n    --text-primary: {{colors.textPrimary}};\\n    --text-secondary: {{colors.textSecondary}};\\n    --text-primary-dark: {{colors.textPrimaryDark}};\\n    --text-secondary-dark: {{colors.textSecondaryDark}};\\n    --z-footer-line: rgba(255,255,255,0.10);\\n    --z-avatar-ring: rgba(255,255,255,0.18);\\n  }\\n  body.slide {\\n    background-color: var(--bg);\\n    background-image: radial-gradient(rgba(255,255,255,0.06) 1.5px, transparent 1.5px);\\n    background-size: 48px 48px;\\n    color: var(--text-primary);\\n    font-family: '{{fonts.body}}', -apple-system, sans-serif;\\n  }\\n  /* HEADER */\\n  .z-label.badge {\\n    background: var(--accent-soft); border: 1px solid var(--accent-border); color: var(--accent);\\n    padding: 0 22px; height: 48px; border-radius: 999px; font-family: '{{fonts.display}}', sans-serif;\\n  }\\n  .z-counter { color: var(--text-secondary); font-family: '{{fonts.display}}', sans-serif; opacity: 1; }\\n  /* FOOTER */\\n  .z-handle { color: var(--text-primary); }\\n  .z-cta { color: var(--accent); }\\n  /* MAIN */\\n  .zone-main { gap: 36px; padding-right: 200px; }\\n  .headline {\\n    font-family: '{{fonts.display}}', sans-serif; font-size: 68px; font-weight: 800;\\n    line-height: 1.15; letter-spacing: -0.02em;\\n  }\\n  .headline .accent { color: var(--accent); }\\n  .subtext { font-size: 32px; font-weight: 400; line-height: 1.4; color: var(--text-secondary); }\\n  .stat-card {\\n    background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 24px;\\n    padding: 30px 38px; display: flex; align-items: center; gap: 28px; margin-top: 8px;\\n  }\\n  .stat-value { font-family: '{{fonts.display}}', sans-serif; font-size: 56px; font-weight: 800; color: var(--accent); line-height: 1; }\\n  .stat-desc { font-size: 27px; font-weight: 500; line-height: 1.35; color: var(--text-secondary); }\\n  .mascot {\\n    position: absolute; right: -40px; bottom: -10px; width: 300px; height: auto;\\n    pointer-events: none; filter: drop-shadow(0 20px 30px rgba(0,0,0,0.35));\\n  }\\n</style>\\n</head>\\n<body class=\\\"slide {{debugClass}}\\\">\\n  <header class=\\\"zone-header\\\">\\n    <div class=\\\"z-label badge\\\">{{badgeIcon}} {{#if badgeText}}{{badgeText}}{{else}}{{series}}{{/if}}</div>\\n    <div class=\\\"z-counter\\\">{{pageCounter}}</div>\\n  </header>\\n\\n  <main class=\\\"zone-main\\\">\\n    <h1 class=\\\"headline\\\">{{{headlineHtml}}}</h1>\\n    {{#if subtext}}<p class=\\\"subtext\\\">{{subtext}}</p>{{/if}}\\n    {{#if stat}}\\n    <div class=\\\"stat-card\\\">\\n      <div class=\\\"stat-value\\\">{{stat.value}}</div>\\n      <div class=\\\"stat-desc\\\">{{stat.desc}}</div>\\n    </div>\\n    {{/if}}\\n    {{#if mascot}}<img class=\\\"mascot\\\" src=\\\"{{mascot}}\\\" alt=\\\"\\\">{{/if}}\\n  </main>\\n\\n  <footer class=\\\"zone-footer\\\">\\n    <div class=\\\"z-author\\\">\\n      <img class=\\\"z-avatar\\\" src=\\\"{{author.avatar}}\\\" alt=\\\"\\\">\\n      <span class=\\\"z-handle\\\">{{author.handle}}</span>\\n    </div>\\n    <span class=\\\"z-cta\\\">{{ctaText}}</span>\\n  </footer>\\n</body>\\n</html>\\n\",\"list\":\"<!DOCTYPE html>\\n<html lang=\\\"ru\\\">\\n<head>\\n<meta charset=\\\"UTF-8\\\">\\n<meta name=\\\"viewport\\\" content=\\\"width=1080, height=1350, initial-scale=1.0\\\">\\n<title>{{number}}</title>\\n<link rel=\\\"stylesheet\\\" href=\\\"../../assets/fonts/fonts.css\\\">\\n<link rel=\\\"stylesheet\\\" href=\\\"../../styles/_zones.css\\\">\\n<style>\\n  :root {\\n    --bg: {{colors.bg}};\\n    --bg-light: {{colors.bgLight}};\\n    --card-bg: {{colors.cardBg}};\\n    --card-border: {{colors.cardBorder}};\\n    --accent: {{colors.accent}};\\n    --accent-soft: {{colors.accentSoft}};\\n    --accent-border: {{colors.accentBorder}};\\n    --highlight: {{colors.highlight}};\\n    --text-primary: {{colors.textPrimary}};\\n    --text-secondary: {{colors.textSecondary}};\\n    --text-primary-dark: {{colors.textPrimaryDark}};\\n    --text-secondary-dark: {{colors.textSecondaryDark}};\\n    --z-footer-line: rgba(255,255,255,0.10);\\n    --z-avatar-ring: rgba(255,255,255,0.18);\\n  }\\n  body.slide {\\n    background-color: var(--bg);\\n    background-image: radial-gradient(rgba(255,255,255,0.06) 1.5px, transparent 1.5px);\\n    background-size: 48px 48px;\\n    color: var(--text-primary);\\n    font-family: '{{fonts.body}}', -apple-system, sans-serif;\\n  }\\n  /* HEADER */\\n  .z-label.badge {\\n    background: var(--accent-soft); border: 1px solid var(--accent-border); color: var(--accent);\\n    padding: 0 22px; height: 48px; border-radius: 999px; font-family: '{{fonts.display}}', sans-serif;\\n  }\\n  .z-counter { color: var(--text-secondary); font-family: '{{fonts.display}}', sans-serif; opacity: 1; }\\n  /* FOOTER */\\n  .z-handle { color: var(--text-primary); }\\n  .z-cta { color: var(--accent); }\\n  /* MAIN */\\n  .zone-main { gap: 40px; }\\n  .title-row { display: flex; align-items: flex-start; gap: 26px; }\\n  .big-number {\\n    font-family: '{{fonts.display}}', sans-serif; font-size: 120px; font-weight: 800;\\n    color: var(--accent); line-height: 0.85; letter-spacing: -0.03em; flex-shrink: 0;\\n  }\\n  .headline {\\n    font-family: '{{fonts.display}}', sans-serif; font-size: 50px; font-weight: 800;\\n    line-height: 1.15; letter-spacing: -0.01em; padding-top: 6px;\\n  }\\n  .items { display: flex; flex-direction: column; gap: 20px; }\\n  .item {\\n    background: var(--card-bg); border-left: 5px solid var(--accent); border-radius: 14px;\\n    padding: 26px 32px; font-size: 30px; font-weight: 400; line-height: 1.4;\\n  }\\n</style>\\n</head>\\n<body class=\\\"slide {{debugClass}}\\\">\\n  <header class=\\\"zone-header\\\">\\n    <div class=\\\"z-label badge\\\">{{#if badgeText}}{{badgeText}}{{else}}{{series}}{{/if}}</div>\\n    <div class=\\\"z-counter\\\">{{pageCounter}}</div>\\n  </header>\\n\\n  <main class=\\\"zone-main\\\">\\n    <div class=\\\"title-row\\\">\\n      <div class=\\\"big-number\\\">{{number}}</div>\\n      <h2 class=\\\"headline\\\">{{{headlineHtml}}}</h2>\\n    </div>\\n    <div class=\\\"items\\\">\\n      {{#each items}}<div class=\\\"item\\\">{{this}}</div>{{/each}}\\n    </div>\\n  </main>\\n\\n  <footer class=\\\"zone-footer\\\">\\n    <div class=\\\"z-author\\\">\\n      <img class=\\\"z-avatar\\\" src=\\\"{{author.avatar}}\\\" alt=\\\"\\\">\\n      <span class=\\\"z-handle\\\">{{author.handle}}</span>\\n    </div>\\n    <span class=\\\"z-cta\\\">{{ctaText}}</span>\\n  </footer>\\n</body>\\n</html>\\n\",\"outro\":\"<!DOCTYPE html>\\n<html lang=\\\"ru\\\">\\n<head>\\n<meta charset=\\\"UTF-8\\\">\\n<meta name=\\\"viewport\\\" content=\\\"width=1080, height=1350, initial-scale=1.0\\\">\\n<title>outro</title>\\n<link rel=\\\"stylesheet\\\" href=\\\"../../assets/fonts/fonts.css\\\">\\n<link rel=\\\"stylesheet\\\" href=\\\"../../styles/_zones.css\\\">\\n<style>\\n  :root {\\n    --bg: {{colors.bg}};\\n    --bg-light: {{colors.bgLight}};\\n    --card-bg: {{colors.cardBg}};\\n    --card-border: {{colors.cardBorder}};\\n    --accent: {{colors.accent}};\\n    --accent-soft: {{colors.accentSoft}};\\n    --accent-border: {{colors.accentBorder}};\\n    --highlight: {{colors.highlight}};\\n    --text-primary: {{colors.textPrimary}};\\n    --text-secondary: {{colors.textSecondary}};\\n    --text-primary-dark: {{colors.textPrimaryDark}};\\n    --text-secondary-dark: {{colors.textSecondaryDark}};\\n    --z-footer-line: rgba(255,255,255,0.10);\\n    --z-avatar-ring: rgba(255,255,255,0.18);\\n  }\\n  body.slide {\\n    background-color: var(--bg);\\n    background-image: radial-gradient(rgba(255,255,255,0.06) 1.5px, transparent 1.5px);\\n    background-size: 48px 48px;\\n    color: var(--text-primary);\\n    font-family: '{{fonts.body}}', -apple-system, sans-serif;\\n  }\\n  /* HEADER */\\n  .z-label.badge {\\n    background: var(--accent-soft); border: 1px solid var(--accent-border); color: var(--accent);\\n    padding: 0 22px; height: 48px; border-radius: 999px; font-family: '{{fonts.display}}', sans-serif;\\n  }\\n  .z-counter { color: var(--text-secondary); font-family: '{{fonts.display}}', sans-serif; opacity: 1; }\\n  /* FOOTER */\\n  .z-handle { color: var(--text-primary); }\\n  .z-cta { color: var(--accent); }\\n  /* светлая версия для финального слайда */\\n  body.slide {\\n    background-color: var(--bg-light);\\n    background-image: radial-gradient(rgba(0,0,0,0.05) 1.5px, transparent 1.5px);\\n    color: var(--text-primary-dark);\\n    --z-footer-line: rgba(0,0,0,0.10);\\n    --z-avatar-ring: rgba(0,0,0,0.08);\\n  }\\n  .z-counter { color: var(--text-secondary-dark); }\\n  .z-handle { color: var(--text-primary-dark); }\\n  .z-sub { color: var(--text-secondary-dark); opacity: 1; }\\n  .z-cta { color: var(--accent); }\\n  /* MAIN */\\n  .zone-main { gap: 36px; }\\n  .headline {\\n    font-family: '{{fonts.display}}', sans-serif; font-size: 60px; font-weight: 800;\\n    line-height: 1.25; letter-spacing: -0.01em;\\n  }\\n  .headline .hl { background: var(--highlight); padding: 0 8px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }\\n  .subtext { font-size: 30px; font-weight: 400; line-height: 1.45; color: var(--text-secondary-dark); max-width: 820px; }\\n</style>\\n</head>\\n<body class=\\\"slide {{debugClass}}\\\">\\n  <header class=\\\"zone-header\\\">\\n    <div class=\\\"z-label badge\\\">{{#if badgeText}}{{badgeText}}{{else}}{{series}}{{/if}}</div>\\n    <div class=\\\"z-counter\\\">{{pageCounter}}</div>\\n  </header>\\n\\n  <main class=\\\"zone-main\\\">\\n    <h2 class=\\\"headline\\\">{{{headlineHtml}}}</h2>\\n    {{#if subtext}}<p class=\\\"subtext\\\">{{subtext}}</p>{{/if}}\\n  </main>\\n\\n  <footer class=\\\"zone-footer\\\">\\n    <div class=\\\"z-author\\\">\\n      <img class=\\\"z-avatar\\\" src=\\\"{{author.avatar}}\\\" alt=\\\"\\\">\\n      <div>\\n        <div class=\\\"z-handle\\\">{{author.handle}}</div>\\n        <div class=\\\"z-sub\\\">{{author.name}} · {{author.role}}</div>\\n      </div>\\n    </div>\\n    <span class=\\\"z-cta\\\">{{ctaText}}</span>\\n  </footer>\\n</body>\\n</html>\\n\"}},\"style-2-bold-block\":{\"theme\":{\"colors\":{\"bgRed\":\"#D11F1F\",\"bgBlack\":\"#0D0D0D\",\"bgWhite\":\"#F7F5F0\",\"textOnRed\":\"#FFFFFF\",\"textOnBlack\":\"#FFFFFF\",\"textOnWhite\":\"#141414\",\"textSecondaryOnRed\":\"rgba(255,255,255,0.82)\",\"textSecondaryOnBlack\":\"rgba(255,255,255,0.72)\",\"textSecondaryOnWhite\":\"rgba(20,20,20,0.66)\",\"highlight\":\"#F5E500\",\"highlightOnWhite\":\"#D11F1F\"},\"fonts\":{\"display\":\"Unbounded\",\"body\":\"Montserrat\"}},\"slides\":{\"cover\":\"<!DOCTYPE html>\\n<html lang=\\\"ru\\\">\\n<head>\\n<meta charset=\\\"UTF-8\\\">\\n<meta name=\\\"viewport\\\" content=\\\"width=1080, height=1350, initial-scale=1.0\\\">\\n<title>cover</title>\\n<link rel=\\\"stylesheet\\\" href=\\\"../../assets/fonts/fonts.css\\\">\\n<link rel=\\\"stylesheet\\\" href=\\\"../../styles/_zones.css\\\">\\n<style>\\n  :root {\\n    --bg-red: {{colors.bgRed}};\\n    --bg-black: {{colors.bgBlack}};\\n    --bg-white: {{colors.bgWhite}};\\n    --text-on-red: {{colors.textOnRed}};\\n    --text-on-black: {{colors.textOnBlack}};\\n    --text-on-white: {{colors.textOnWhite}};\\n    --text-sec-red: {{colors.textSecondaryOnRed}};\\n    --text-sec-black: {{colors.textSecondaryOnBlack}};\\n    --text-sec-white: {{colors.textSecondaryOnWhite}};\\n    --highlight: {{colors.highlight}};\\n    --highlight-on-white: {{colors.highlightOnWhite}};\\n  }\\n  body.slide { font-family: '{{fonts.body}}', -apple-system, sans-serif; }\\n  body.bg-red   { background: var(--bg-red);   color: var(--text-on-red);   --sec: var(--text-sec-red);   --hl: var(--highlight); --z-footer-line: rgba(255,255,255,0.22); }\\n  body.bg-black { background: var(--bg-black); color: var(--text-on-black); --sec: var(--text-sec-black); --hl: var(--highlight); --z-footer-line: rgba(255,255,255,0.14); }\\n  body.bg-white { background: var(--bg-white); color: var(--text-on-white); --sec: var(--text-sec-white); --hl: var(--highlight-on-white); --z-footer-line: rgba(0,0,0,0.12); }\\n  /* HEADER */\\n  .z-label { font-family: '{{fonts.display}}', sans-serif; font-size: 20px; font-weight: 700; opacity: 0.8; }\\n  .z-counter { font-family: '{{fonts.display}}', sans-serif; opacity: 0.6; }\\n  /* FOOTER */\\n  .z-handle { font-family: '{{fonts.body}}', sans-serif; font-weight: 600; opacity: 0.75; }\\n  .z-cta { font-family: '{{fonts.display}}', sans-serif; font-size: 24px; font-weight: 800; }\\n  /* MAIN общее */\\n  .zone-main { gap: 36px; }\\n  .headline { font-family: '{{fonts.display}}', sans-serif; font-weight: 900; text-transform: uppercase; letter-spacing: -0.01em; }\\n  .headline .hl { color: var(--hl); }\\n  .body-text { font-size: 32px; font-weight: 400; line-height: 1.45; color: var(--sec); }\\n  .headline { font-size: 76px; line-height: 1.04; }\\n  .subtext { font-size: 34px; font-weight: 400; line-height: 1.4; color: var(--sec); }\\n</style>\\n</head>\\n<body class=\\\"slide {{bgClass}} {{debugClass}}\\\">\\n  <header class=\\\"zone-header\\\">\\n    <div class=\\\"z-label\\\">{{#if badgeText}}{{badgeText}}{{else}}{{series}}{{/if}}</div>\\n    <div class=\\\"z-counter\\\">{{pageCounter}}</div>\\n  </header>\\n\\n  <main class=\\\"zone-main\\\">\\n    <h1 class=\\\"headline\\\">{{{headlineHtml}}}</h1>\\n    {{#if subtext}}<p class=\\\"subtext\\\">{{subtext}}</p>{{/if}}\\n  </main>\\n\\n  <footer class=\\\"zone-footer\\\">\\n    <span class=\\\"z-handle\\\">{{author.handle}}</span>\\n    <span class=\\\"z-cta\\\">{{ctaText}}</span>\\n  </footer>\\n</body>\\n</html>\\n\",\"outro\":\"<!DOCTYPE html>\\n<html lang=\\\"ru\\\">\\n<head>\\n<meta charset=\\\"UTF-8\\\">\\n<meta name=\\\"viewport\\\" content=\\\"width=1080, height=1350, initial-scale=1.0\\\">\\n<title>outro</title>\\n<link rel=\\\"stylesheet\\\" href=\\\"../../assets/fonts/fonts.css\\\">\\n<link rel=\\\"stylesheet\\\" href=\\\"../../styles/_zones.css\\\">\\n<style>\\n  :root {\\n    --bg-red: {{colors.bgRed}};\\n    --bg-black: {{colors.bgBlack}};\\n    --bg-white: {{colors.bgWhite}};\\n    --text-on-red: {{colors.textOnRed}};\\n    --text-on-black: {{colors.textOnBlack}};\\n    --text-on-white: {{colors.textOnWhite}};\\n    --text-sec-red: {{colors.textSecondaryOnRed}};\\n    --text-sec-black: {{colors.textSecondaryOnBlack}};\\n    --text-sec-white: {{colors.textSecondaryOnWhite}};\\n    --highlight: {{colors.highlight}};\\n    --highlight-on-white: {{colors.highlightOnWhite}};\\n  }\\n  body.slide { font-family: '{{fonts.body}}', -apple-system, sans-serif; }\\n  body.bg-red   { background: var(--bg-red);   color: var(--text-on-red);   --sec: var(--text-sec-red);   --hl: var(--highlight); --z-footer-line: rgba(255,255,255,0.22); }\\n  body.bg-black { background: var(--bg-black); color: var(--text-on-black); --sec: var(--text-sec-black); --hl: var(--highlight); --z-footer-line: rgba(255,255,255,0.14); }\\n  body.bg-white { background: var(--bg-white); color: var(--text-on-white); --sec: var(--text-sec-white); --hl: var(--highlight-on-white); --z-footer-line: rgba(0,0,0,0.12); }\\n  /* HEADER */\\n  .z-label { font-family: '{{fonts.display}}', sans-serif; font-size: 20px; font-weight: 700; opacity: 0.8; }\\n  .z-counter { font-family: '{{fonts.display}}', sans-serif; opacity: 0.6; }\\n  /* FOOTER */\\n  .z-handle { font-family: '{{fonts.body}}', sans-serif; font-weight: 600; opacity: 0.75; }\\n  .z-cta { font-family: '{{fonts.display}}', sans-serif; font-size: 24px; font-weight: 800; }\\n  /* MAIN общее */\\n  .zone-main { gap: 36px; }\\n  .headline { font-family: '{{fonts.display}}', sans-serif; font-weight: 900; text-transform: uppercase; letter-spacing: -0.01em; }\\n  .headline .hl { color: var(--hl); }\\n  .body-text { font-size: 32px; font-weight: 400; line-height: 1.45; color: var(--sec); }\\n  .headline { font-size: 68px; line-height: 1.08; }\\n</style>\\n</head>\\n<body class=\\\"slide {{bgClass}} {{debugClass}}\\\">\\n  <header class=\\\"zone-header\\\">\\n    <div class=\\\"z-label\\\">{{#if badgeText}}{{badgeText}}{{else}}{{series}}{{/if}}</div>\\n    <div class=\\\"z-counter\\\">{{pageCounter}}</div>\\n  </header>\\n\\n  <main class=\\\"zone-main\\\">\\n    <h2 class=\\\"headline\\\">{{{headlineHtml}}}</h2>\\n    {{#if body}}<p class=\\\"body-text\\\">{{{body}}}</p>{{/if}}\\n  </main>\\n\\n  <footer class=\\\"zone-footer\\\">\\n    <span class=\\\"z-handle\\\">{{author.handle}}</span>\\n    <span class=\\\"z-cta\\\">{{ctaText}}</span>\\n  </footer>\\n</body>\\n</html>\\n\",\"point\":\"<!DOCTYPE html>\\n<html lang=\\\"ru\\\">\\n<head>\\n<meta charset=\\\"UTF-8\\\">\\n<meta name=\\\"viewport\\\" content=\\\"width=1080, height=1350, initial-scale=1.0\\\">\\n<title>{{eyebrowNumber}}</title>\\n<link rel=\\\"stylesheet\\\" href=\\\"../../assets/fonts/fonts.css\\\">\\n<link rel=\\\"stylesheet\\\" href=\\\"../../styles/_zones.css\\\">\\n<style>\\n  :root {\\n    --bg-red: {{colors.bgRed}};\\n    --bg-black: {{colors.bgBlack}};\\n    --bg-white: {{colors.bgWhite}};\\n    --text-on-red: {{colors.textOnRed}};\\n    --text-on-black: {{colors.textOnBlack}};\\n    --text-on-white: {{colors.textOnWhite}};\\n    --text-sec-red: {{colors.textSecondaryOnRed}};\\n    --text-sec-black: {{colors.textSecondaryOnBlack}};\\n    --text-sec-white: {{colors.textSecondaryOnWhite}};\\n    --highlight: {{colors.highlight}};\\n    --highlight-on-white: {{colors.highlightOnWhite}};\\n  }\\n  body.slide { font-family: '{{fonts.body}}', -apple-system, sans-serif; }\\n  body.bg-red   { background: var(--bg-red);   color: var(--text-on-red);   --sec: var(--text-sec-red);   --hl: var(--highlight); --z-footer-line: rgba(255,255,255,0.22); }\\n  body.bg-black { background: var(--bg-black); color: var(--text-on-black); --sec: var(--text-sec-black); --hl: var(--highlight); --z-footer-line: rgba(255,255,255,0.14); }\\n  body.bg-white { background: var(--bg-white); color: var(--text-on-white); --sec: var(--text-sec-white); --hl: var(--highlight-on-white); --z-footer-line: rgba(0,0,0,0.12); }\\n  /* HEADER */\\n  .z-label { font-family: '{{fonts.display}}', sans-serif; font-size: 20px; font-weight: 700; opacity: 0.8; }\\n  .z-counter { font-family: '{{fonts.display}}', sans-serif; opacity: 0.6; }\\n  /* FOOTER */\\n  .z-handle { font-family: '{{fonts.body}}', sans-serif; font-weight: 600; opacity: 0.75; }\\n  .z-cta { font-family: '{{fonts.display}}', sans-serif; font-size: 24px; font-weight: 800; }\\n  /* MAIN общее */\\n  .zone-main { gap: 36px; }\\n  .headline { font-family: '{{fonts.display}}', sans-serif; font-weight: 900; text-transform: uppercase; letter-spacing: -0.01em; }\\n  .headline .hl { color: var(--hl); }\\n  .body-text { font-size: 32px; font-weight: 400; line-height: 1.45; color: var(--sec); }\\n  .eyebrow {\\n    font-family: '{{fonts.display}}', sans-serif; font-size: 44px; font-weight: 900;\\n    text-transform: uppercase; color: var(--hl); line-height: 1.05;\\n  }\\n  .headline { font-size: 62px; line-height: 1.08; }\\n</style>\\n</head>\\n<body class=\\\"slide {{bgClass}} {{debugClass}}\\\">\\n  <header class=\\\"zone-header\\\">\\n    <div class=\\\"z-label\\\">{{#if badgeText}}{{badgeText}}{{else}}{{series}}{{/if}}</div>\\n    <div class=\\\"z-counter\\\">{{pageCounter}}</div>\\n  </header>\\n\\n  <main class=\\\"zone-main\\\">\\n    <div class=\\\"eyebrow\\\">{{eyebrowNumber}}. {{eyebrowText}}</div>\\n    <h2 class=\\\"headline\\\">{{{headlineHtml}}}</h2>\\n    {{#if body}}<p class=\\\"body-text\\\">{{body}}</p>{{/if}}\\n  </main>\\n\\n  <footer class=\\\"zone-footer\\\">\\n    <span class=\\\"z-handle\\\">{{author.handle}}</span>\\n    <span class=\\\"z-cta\\\">{{ctaText}}</span>\\n  </footer>\\n</body>\\n</html>\\n\"}},\"style-3-editorial\":{\"theme\":{\"colors\":{\"bgBlack\":\"#141414\",\"bgCream\":\"#F1ECE3\",\"textOnBlack\":\"#F5F3EE\",\"textOnCream\":\"#171512\",\"textSecondaryOnBlack\":\"rgba(245,243,238,0.72)\",\"textSecondaryOnCream\":\"rgba(23,21,18,0.62)\",\"accent\":\"#FF5A2E\"},\"fonts\":{\"display\":\"Unbounded\",\"body\":\"Montserrat\"}},\"slides\":{\"cover\":\"<!DOCTYPE html>\\n<html lang=\\\"ru\\\">\\n<head>\\n<meta charset=\\\"UTF-8\\\">\\n<meta name=\\\"viewport\\\" content=\\\"width=1080, height=1350, initial-scale=1.0\\\">\\n<title>cover</title>\\n<link rel=\\\"stylesheet\\\" href=\\\"../../assets/fonts/fonts.css\\\">\\n<link rel=\\\"stylesheet\\\" href=\\\"../../styles/_zones.css\\\">\\n<style>\\n  :root {\\n    --bg-black: {{colors.bgBlack}};\\n    --bg-cream: {{colors.bgCream}};\\n    --text-on-black: {{colors.textOnBlack}};\\n    --text-on-cream: {{colors.textOnCream}};\\n    --text-sec-black: {{colors.textSecondaryOnBlack}};\\n    --text-sec-cream: {{colors.textSecondaryOnCream}};\\n    --accent: {{colors.accent}};\\n  }\\n  body.slide { font-family: '{{fonts.body}}', -apple-system, sans-serif; }\\n  body.bg-black { background: var(--bg-black); color: var(--text-on-black); --sec: var(--text-sec-black); --z-footer-line: rgba(255,255,255,0.14); }\\n  body.bg-cream { background: var(--bg-cream); color: var(--text-on-cream); --sec: var(--text-sec-cream); --z-footer-line: rgba(0,0,0,0.12); }\\n  /* HEADER */\\n  .z-label { font-family: '{{fonts.display}}', sans-serif; font-size: 20px; font-weight: 700; color: var(--accent); }\\n  .z-counter { font-family: '{{fonts.display}}', sans-serif; }\\n  /* FOOTER */\\n  .z-handle { font-size: 22px; font-weight: 500; opacity: 0.7; }\\n  .z-handle b { font-weight: 700; opacity: 1; }\\n  .z-cta { font-family: '{{fonts.display}}', sans-serif; font-size: 24px; font-weight: 800; color: var(--accent); }\\n  /* MAIN общее */\\n  .zone-main { gap: 40px; }\\n  .headline { font-family: '{{fonts.display}}', sans-serif; font-weight: 800; text-transform: uppercase; letter-spacing: -0.01em; }\\n  .headline .accent { color: var(--accent); font-style: italic; font-weight: 900; }\\n  .body-block { display: flex; flex-direction: column; gap: 26px; }\\n  .body-text { font-size: 30px; font-weight: 400; line-height: 1.5; color: var(--sec); }\\n  .body-text b, .body-text strong { font-weight: 800; color: inherit; }\\n  .headline { font-size: 66px; line-height: 1.12; }\\n  .subtext { font-size: 32px; font-weight: 400; line-height: 1.45; color: var(--sec); }\\n</style>\\n</head>\\n<body class=\\\"slide {{bgClass}} {{debugClass}}\\\">\\n  <header class=\\\"zone-header\\\">\\n    <div class=\\\"z-label\\\">{{#if badgeText}}{{badgeText}}{{else}}{{series}}{{/if}}</div>\\n    <div class=\\\"z-counter\\\">{{pageCounter}}</div>\\n  </header>\\n\\n  <main class=\\\"zone-main\\\">\\n    <h1 class=\\\"headline\\\">{{{headlineHtml}}}</h1>\\n    {{#if subtext}}<p class=\\\"subtext\\\">{{subtext}}</p>{{/if}}\\n  </main>\\n\\n  <footer class=\\\"zone-footer\\\">\\n    <span class=\\\"z-handle\\\">Больше в Telegram → <b>{{author.handle}}</b></span>\\n    <span class=\\\"z-cta\\\">{{ctaText}}</span>\\n  </footer>\\n</body>\\n</html>\\n\",\"outro\":\"<!DOCTYPE html>\\n<html lang=\\\"ru\\\">\\n<head>\\n<meta charset=\\\"UTF-8\\\">\\n<meta name=\\\"viewport\\\" content=\\\"width=1080, height=1350, initial-scale=1.0\\\">\\n<title>outro</title>\\n<link rel=\\\"stylesheet\\\" href=\\\"../../assets/fonts/fonts.css\\\">\\n<link rel=\\\"stylesheet\\\" href=\\\"../../styles/_zones.css\\\">\\n<style>\\n  :root {\\n    --bg-black: {{colors.bgBlack}};\\n    --bg-cream: {{colors.bgCream}};\\n    --text-on-black: {{colors.textOnBlack}};\\n    --text-on-cream: {{colors.textOnCream}};\\n    --text-sec-black: {{colors.textSecondaryOnBlack}};\\n    --text-sec-cream: {{colors.textSecondaryOnCream}};\\n    --accent: {{colors.accent}};\\n  }\\n  body.slide { font-family: '{{fonts.body}}', -apple-system, sans-serif; }\\n  body.bg-black { background: var(--bg-black); color: var(--text-on-black); --sec: var(--text-sec-black); --z-footer-line: rgba(255,255,255,0.14); }\\n  body.bg-cream { background: var(--bg-cream); color: var(--text-on-cream); --sec: var(--text-sec-cream); --z-footer-line: rgba(0,0,0,0.12); }\\n  /* HEADER */\\n  .z-label { font-family: '{{fonts.display}}', sans-serif; font-size: 20px; font-weight: 700; color: var(--accent); }\\n  .z-counter { font-family: '{{fonts.display}}', sans-serif; }\\n  /* FOOTER */\\n  .z-handle { font-size: 22px; font-weight: 500; opacity: 0.7; }\\n  .z-handle b { font-weight: 700; opacity: 1; }\\n  .z-cta { font-family: '{{fonts.display}}', sans-serif; font-size: 24px; font-weight: 800; color: var(--accent); }\\n  /* MAIN общее */\\n  .zone-main { gap: 40px; }\\n  .headline { font-family: '{{fonts.display}}', sans-serif; font-weight: 800; text-transform: uppercase; letter-spacing: -0.01em; }\\n  .headline .accent { color: var(--accent); font-style: italic; font-weight: 900; }\\n  .body-block { display: flex; flex-direction: column; gap: 26px; }\\n  .body-text { font-size: 30px; font-weight: 400; line-height: 1.5; color: var(--sec); }\\n  .body-text b, .body-text strong { font-weight: 800; color: inherit; }\\n  .headline { font-size: 60px; line-height: 1.15; }\\n  .list { display: flex; flex-direction: column; gap: 22px; }\\n  .list-item { font-size: 30px; font-weight: 500; line-height: 1.4; padding-left: 34px; position: relative; color: var(--sec); }\\n  .list-item::before { content: '•'; position: absolute; left: 0; color: var(--accent); font-weight: 900; }\\n</style>\\n</head>\\n<body class=\\\"slide {{bgClass}} {{debugClass}}\\\">\\n  <header class=\\\"zone-header\\\">\\n    <div class=\\\"z-label\\\">{{#if badgeText}}{{badgeText}}{{else}}{{series}}{{/if}}</div>\\n    <div class=\\\"z-counter\\\">{{pageCounter}}</div>\\n  </header>\\n\\n  <main class=\\\"zone-main\\\">\\n    <h2 class=\\\"headline\\\">{{{headlineHtml}}}</h2>\\n    {{#if items}}\\n    <div class=\\\"list\\\">\\n      {{#each items}}<div class=\\\"list-item\\\">{{{this}}}</div>{{/each}}\\n    </div>\\n    {{/if}}\\n    {{#if paragraphs}}\\n    <div class=\\\"body-block\\\">\\n      {{#each paragraphs}}<p class=\\\"body-text\\\">{{{this}}}</p>{{/each}}\\n    </div>\\n    {{/if}}\\n  </main>\\n\\n  <footer class=\\\"zone-footer\\\">\\n    <span class=\\\"z-handle\\\">Больше в Telegram → <b>{{author.handle}}</b></span>\\n    <span class=\\\"z-cta\\\">{{ctaText}}</span>\\n  </footer>\\n</body>\\n</html>\\n\",\"secret\":\"<!DOCTYPE html>\\n<html lang=\\\"ru\\\">\\n<head>\\n<meta charset=\\\"UTF-8\\\">\\n<meta name=\\\"viewport\\\" content=\\\"width=1080, height=1350, initial-scale=1.0\\\">\\n<title>secret</title>\\n<link rel=\\\"stylesheet\\\" href=\\\"../../assets/fonts/fonts.css\\\">\\n<link rel=\\\"stylesheet\\\" href=\\\"../../styles/_zones.css\\\">\\n<style>\\n  :root {\\n    --bg-black: {{colors.bgBlack}};\\n    --bg-cream: {{colors.bgCream}};\\n    --text-on-black: {{colors.textOnBlack}};\\n    --text-on-cream: {{colors.textOnCream}};\\n    --text-sec-black: {{colors.textSecondaryOnBlack}};\\n    --text-sec-cream: {{colors.textSecondaryOnCream}};\\n    --accent: {{colors.accent}};\\n  }\\n  body.slide { font-family: '{{fonts.body}}', -apple-system, sans-serif; }\\n  body.bg-black { background: var(--bg-black); color: var(--text-on-black); --sec: var(--text-sec-black); --z-footer-line: rgba(255,255,255,0.14); }\\n  body.bg-cream { background: var(--bg-cream); color: var(--text-on-cream); --sec: var(--text-sec-cream); --z-footer-line: rgba(0,0,0,0.12); }\\n  /* HEADER */\\n  .z-label { font-family: '{{fonts.display}}', sans-serif; font-size: 20px; font-weight: 700; color: var(--accent); }\\n  .z-counter { font-family: '{{fonts.display}}', sans-serif; }\\n  /* FOOTER */\\n  .z-handle { font-size: 22px; font-weight: 500; opacity: 0.7; }\\n  .z-handle b { font-weight: 700; opacity: 1; }\\n  .z-cta { font-family: '{{fonts.display}}', sans-serif; font-size: 24px; font-weight: 800; color: var(--accent); }\\n  /* MAIN общее */\\n  .zone-main { gap: 40px; }\\n  .headline { font-family: '{{fonts.display}}', sans-serif; font-weight: 800; text-transform: uppercase; letter-spacing: -0.01em; }\\n  .headline .accent { color: var(--accent); font-style: italic; font-weight: 900; }\\n  .body-block { display: flex; flex-direction: column; gap: 26px; }\\n  .body-text { font-size: 30px; font-weight: 400; line-height: 1.5; color: var(--sec); }\\n  .body-text b, .body-text strong { font-weight: 800; color: inherit; }\\n  .headline { font-size: 52px; line-height: 1.18; letter-spacing: -0.005em; }\\n  .cta-inline { font-size: 32px; font-weight: 800; color: inherit; }\\n</style>\\n</head>\\n<body class=\\\"slide {{bgClass}} {{debugClass}}\\\">\\n  <header class=\\\"zone-header\\\">\\n    <div class=\\\"z-label\\\">{{#if badgeText}}{{badgeText}}{{else}}{{series}}{{/if}}</div>\\n    <div class=\\\"z-counter\\\">{{pageCounter}}</div>\\n  </header>\\n\\n  <main class=\\\"zone-main\\\">\\n    <h2 class=\\\"headline\\\"><span class=\\\"accent\\\">{{eyebrowLabel}}</span> {{{headlineHtml}}}</h2>\\n    <div class=\\\"body-block\\\">\\n      {{#each paragraphs}}<p class=\\\"body-text\\\">{{{this}}}</p>{{/each}}\\n    </div>\\n  </main>\\n\\n  <footer class=\\\"zone-footer\\\">\\n    <span class=\\\"z-handle\\\">Больше в Telegram → <b>{{author.handle}}</b></span>\\n    <span class=\\\"z-cta\\\">{{ctaText}}</span>\\n  </footer>\\n</body>\\n</html>\\n\"}},\"style-4-friendly-cream\":{\"theme\":{\"colors\":{\"bg\":\"#F5EFE4\",\"textPrimary\":\"#211D17\",\"textSecondary\":\"#6B6558\",\"cardBg\":\"#FFFFFF\",\"cardShadow\":\"rgba(33,29,23,0.08)\",\"iconStroke\":\"#211D17\",\"underlineOrange\":\"#E8794A\",\"underlineBlue\":\"#3B6FE0\",\"underlineGreen\":\"#3FAE6B\",\"underlinePink\":\"#E14F86\"},\"fonts\":{\"display\":\"Rubik\",\"body\":\"Inter\"}},\"slides\":{\"cover\":\"<!DOCTYPE html>\\n<html lang=\\\"ru\\\">\\n<head>\\n<meta charset=\\\"UTF-8\\\">\\n<meta name=\\\"viewport\\\" content=\\\"width=1080, height=1350, initial-scale=1.0\\\">\\n<title>cover</title>\\n<link rel=\\\"stylesheet\\\" href=\\\"../../assets/fonts/fonts.css\\\">\\n<link rel=\\\"stylesheet\\\" href=\\\"../../styles/_zones.css\\\">\\n<style>\\n  :root {\\n    --bg: {{colors.bg}};\\n    --text-primary: {{colors.textPrimary}};\\n    --text-secondary: {{colors.textSecondary}};\\n    --card-bg: {{colors.cardBg}};\\n    --card-shadow: {{colors.cardShadow}};\\n    --z-footer-line: rgba(33,29,23,0.12);\\n    --z-avatar-ring: rgba(33,29,23,0.10);\\n  }\\n  body.slide {\\n    background-color: var(--bg); color: var(--text-primary);\\n    font-family: '{{fonts.body}}', -apple-system, sans-serif;\\n  }\\n  /* HEADER */\\n  .z-label.pill {\\n    background: #fff; border-radius: 999px; padding: 0 26px; height: 52px;\\n    font-family: '{{fonts.display}}', sans-serif; font-size: 22px; font-weight: 700;\\n    letter-spacing: 0.02em; text-transform: none; box-shadow: 0 4px 14px rgba(33,29,23,0.10);\\n  }\\n  .z-counter { color: var(--text-secondary); opacity: 1; font-family: '{{fonts.display}}', sans-serif; }\\n  /* FOOTER */\\n  .z-handle { color: var(--text-primary); }\\n  .z-cta { color: var(--text-secondary); font-weight: 600; }\\n  /* MAIN общее */\\n  .headline { font-family: '{{fonts.display}}', sans-serif; letter-spacing: -0.01em; }\\n  .headline b { font-weight: 800; }\\n  .zone-main { gap: 44px; }\\n  .headline { font-size: 58px; font-weight: 500; line-height: 1.28; max-width: 860px; }\\n  .mascot { width: 360px; height: auto; }\\n</style>\\n</head>\\n<body class=\\\"slide {{debugClass}}\\\">\\n  <header class=\\\"zone-header\\\">\\n    <div class=\\\"z-label pill\\\">{{#if pill}}{{pill}}{{else}}{{series}}{{/if}}</div>\\n    <div class=\\\"z-counter\\\">{{pageCounter}}</div>\\n  </header>\\n\\n  <main class=\\\"zone-main center-x\\\">\\n    <h1 class=\\\"headline\\\">{{{headlineHtml}}}</h1>\\n    {{#if mascot}}<img class=\\\"mascot\\\" src=\\\"{{mascot}}\\\" alt=\\\"\\\">{{/if}}\\n  </main>\\n\\n  <footer class=\\\"zone-footer\\\">\\n    <div class=\\\"z-author\\\">\\n      <img class=\\\"z-avatar\\\" src=\\\"{{author.avatar}}\\\" alt=\\\"\\\">\\n      <span class=\\\"z-handle\\\">{{author.handle}}</span>\\n    </div>\\n    <span class=\\\"z-cta\\\">{{ctaText}}</span>\\n  </footer>\\n</body>\\n</html>\\n\",\"outro\":\"<!DOCTYPE html>\\n<html lang=\\\"ru\\\">\\n<head>\\n<meta charset=\\\"UTF-8\\\">\\n<meta name=\\\"viewport\\\" content=\\\"width=1080, height=1350, initial-scale=1.0\\\">\\n<title>outro</title>\\n<link rel=\\\"stylesheet\\\" href=\\\"../../assets/fonts/fonts.css\\\">\\n<link rel=\\\"stylesheet\\\" href=\\\"../../styles/_zones.css\\\">\\n<style>\\n  :root {\\n    --bg: {{colors.bg}};\\n    --text-primary: {{colors.textPrimary}};\\n    --text-secondary: {{colors.textSecondary}};\\n    --card-bg: {{colors.cardBg}};\\n    --card-shadow: {{colors.cardShadow}};\\n    --z-footer-line: rgba(33,29,23,0.12);\\n    --z-avatar-ring: rgba(33,29,23,0.10);\\n  }\\n  body.slide {\\n    background-color: var(--bg); color: var(--text-primary);\\n    font-family: '{{fonts.body}}', -apple-system, sans-serif;\\n  }\\n  /* HEADER */\\n  .z-label.pill {\\n    background: #fff; border-radius: 999px; padding: 0 26px; height: 52px;\\n    font-family: '{{fonts.display}}', sans-serif; font-size: 22px; font-weight: 700;\\n    letter-spacing: 0.02em; text-transform: none; box-shadow: 0 4px 14px rgba(33,29,23,0.10);\\n  }\\n  .z-counter { color: var(--text-secondary); opacity: 1; font-family: '{{fonts.display}}', sans-serif; }\\n  /* FOOTER */\\n  .z-handle { color: var(--text-primary); }\\n  .z-cta { color: var(--text-secondary); font-weight: 600; }\\n  /* MAIN общее */\\n  .headline { font-family: '{{fonts.display}}', sans-serif; letter-spacing: -0.01em; }\\n  .headline b { font-weight: 800; }\\n  .zone-main { gap: 30px; }\\n  .headline { font-size: 58px; font-weight: 500; line-height: 1.28; max-width: 860px; }\\n  .subtext { font-size: 30px; font-weight: 400; color: var(--text-secondary); max-width: 760px; line-height: 1.45; }\\n</style>\\n</head>\\n<body class=\\\"slide {{debugClass}}\\\">\\n  <header class=\\\"zone-header\\\">\\n    <div class=\\\"z-label pill\\\">{{#if pill}}{{pill}}{{else}}{{series}}{{/if}}</div>\\n    <div class=\\\"z-counter\\\">{{pageCounter}}</div>\\n  </header>\\n\\n  <main class=\\\"zone-main center-x\\\">\\n    <h2 class=\\\"headline\\\">{{{headlineHtml}}}</h2>\\n    {{#if subtext}}<p class=\\\"subtext\\\">{{subtext}}</p>{{/if}}\\n  </main>\\n\\n  <footer class=\\\"zone-footer\\\">\\n    <div class=\\\"z-author\\\">\\n      <img class=\\\"z-avatar\\\" src=\\\"{{author.avatar}}\\\" alt=\\\"\\\">\\n      <span class=\\\"z-handle\\\">{{author.handle}}</span>\\n    </div>\\n    <span class=\\\"z-cta\\\">{{ctaText}}</span>\\n  </footer>\\n</body>\\n</html>\\n\",\"point\":\"<!DOCTYPE html>\\r\\n<html lang=\\\"ru\\\">\\r\\n<head>\\r\\n<meta charset=\\\"UTF-8\\\">\\r\\n<meta name=\\\"viewport\\\" content=\\\"width=1080, height=1350, initial-scale=1.0\\\">\\r\\n<title>{{number}}</title>\\r\\n<link rel=\\\"stylesheet\\\" href=\\\"../../assets/fonts/fonts.css\\\">\\r\\n<link rel=\\\"stylesheet\\\" href=\\\"../../styles/_zones.css\\\">\\r\\n<style>\\r\\n  :root {\\r\\n    --bg: {{colors.bg}};\\r\\n    --text-primary: {{colors.textPrimary}};\\r\\n    --text-secondary: {{colors.textSecondary}};\\r\\n    --card-bg: {{colors.cardBg}};\\r\\n    --card-shadow: {{colors.cardShadow}};\\r\\n    --u-orange: {{colors.underlineOrange}};\\r\\n    --u-blue: {{colors.underlineBlue}};\\r\\n    --u-green: {{colors.underlineGreen}};\\r\\n    --u-pink: {{colors.underlinePink}};\\r\\n    --z-footer-line: rgba(33,29,23,0.12);\\r\\n    --z-avatar-ring: rgba(33,29,23,0.10);\\r\\n  }\\r\\n  body.slide {\\r\\n    background-color: var(--bg); color: var(--text-primary);\\r\\n    font-family: '{{fonts.body}}', -apple-system, sans-serif;\\r\\n  }\\r\\n  /* HEADER */\\r\\n  .z-label.pill {\\r\\n    background: #fff; border-radius: 999px; padding: 0 26px; height: 52px;\\r\\n    font-family: '{{fonts.display}}', sans-serif; font-size: 22px; font-weight: 700;\\r\\n    letter-spacing: 0.02em; text-transform: none; box-shadow: 0 4px 14px rgba(33,29,23,0.10);\\r\\n  }\\r\\n  .z-counter { color: var(--text-secondary); opacity: 1; font-family: '{{fonts.display}}', sans-serif; }\\r\\n  /* FOOTER */\\r\\n  .z-handle { color: var(--text-primary); }\\r\\n  .z-cta { color: var(--text-secondary); font-weight: 600; }\\r\\n  /* MAIN общее */\\r\\n  .headline { font-family: '{{fonts.display}}', sans-serif; letter-spacing: -0.01em; }\\r\\n  .headline b { font-weight: 800; }\\r\\n  .zone-main { gap: 40px; }\\r\\n  .icon-wrap {\\r\\n    width: 96px; height: 96px; border-radius: 50%; border: 2.5px solid var(--text-primary);\\r\\n    display: flex; align-items: center; justify-content: center; color: var(--text-primary); flex-shrink: 0;\\r\\n  }\\r\\n  .icon-wrap svg { width: 48px; height: 48px; }\\r\\n  .headline { font-size: 50px; font-weight: 800; line-height: 1.22; letter-spacing: -0.005em; max-width: 880px; }\\r\\n  .u-orange, .u-blue, .u-green, .u-pink {\\r\\n    background-repeat: repeat-x; background-position: 2px 100%; background-size: 34px 12px;\\r\\n    padding-bottom: 6px;\\r\\n  }\\r\\n  .u-orange { background-image: url(\\\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='34' height='12' viewBox='0 0 34 12'%3E%3Cpath d='M0,7 C4,3 8,3 10,7 C12,11 16,11 17,7 C18,3 22,3 24,7 C26,11 30,11 34,6' fill='none' stroke='%23E8794A' stroke-width='3.4' stroke-linecap='round'/%3E%3C/svg%3E\\\"); }\\r\\n  .u-blue { background-image: url(\\\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='34' height='12' viewBox='0 0 34 12'%3E%3Cpath d='M0,7 C4,3 8,3 10,7 C12,11 16,11 17,7 C18,3 22,3 24,7 C26,11 30,11 34,6' fill='none' stroke='%233B6FE0' stroke-width='3.4' stroke-linecap='round'/%3E%3C/svg%3E\\\"); }\\r\\n  .u-green { background-image: url(\\\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='34' height='12' viewBox='0 0 34 12'%3E%3Cpath d='M0,7 C4,3 8,3 10,7 C12,11 16,11 17,7 C18,3 22,3 24,7 C26,11 30,11 34,6' fill='none' stroke='%233FAE6B' stroke-width='3.4' stroke-linecap='round'/%3E%3C/svg%3E\\\"); }\\r\\n  .u-pink { background-image: url(\\\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='34' height='12' viewBox='0 0 34 12'%3E%3Cpath d='M0,7 C4,3 8,3 10,7 C12,11 16,11 17,7 C18,3 22,3 24,7 C26,11 30,11 34,6' fill='none' stroke='%23E14F86' stroke-width='3.4' stroke-linecap='round'/%3E%3C/svg%3E\\\"); }\\r\\n  .card {\\r\\n    background: var(--card-bg); border-radius: 28px; box-shadow: 0 14px 34px var(--card-shadow);\\r\\n    padding: 40px 46px; font-style: italic; font-weight: 600; font-size: 32px; line-height: 1.5; width: 100%;\\r\\n  }\\r\\n  .body-block { display: flex; flex-direction: column; gap: 26px; text-align: left; width: 100%; }\\r\\n  .body-text { font-size: 30px; font-weight: 400; line-height: 1.5; }\\r\\n</style>\\r\\n</head>\\r\\n<body class=\\\"slide {{debugClass}}\\\">\\r\\n  <header class=\\\"zone-header\\\">\\r\\n    <div class=\\\"z-label pill\\\">{{#if pill}}{{pill}}{{else}}{{series}}{{/if}}</div>\\r\\n    <div class=\\\"z-counter\\\">{{pageCounter}}</div>\\r\\n  </header>\\r\\n\\r\\n  <main class=\\\"zone-main center-x\\\">\\r\\n    <div class=\\\"icon-wrap\\\">{{{iconSvg}}}</div>\\r\\n    <h2 class=\\\"headline\\\">{{number}}. {{{headlineHtml}}}</h2>\\r\\n    {{#if card}}<div class=\\\"card\\\">{{{card}}}</div>{{/if}}\\r\\n    {{#if paragraphs}}\\r\\n    <div class=\\\"body-block\\\">\\r\\n      {{#each paragraphs}}<p class=\\\"body-text\\\">{{{this}}}</p>{{/each}}\\r\\n    </div>\\r\\n    {{/if}}\\r\\n  </main>\\r\\n\\r\\n  <footer class=\\\"zone-footer\\\">\\r\\n    <div class=\\\"z-author\\\">\\r\\n      <img class=\\\"z-avatar\\\" src=\\\"{{author.avatar}}\\\" alt=\\\"\\\">\\r\\n      <span class=\\\"z-handle\\\">{{author.handle}}</span>\\r\\n    </div>\\r\\n    <span class=\\\"z-cta\\\">{{ctaText}}</span>\\r\\n  </footer>\\r\\n</body>\\r\\n</html>\\r\\n\"}}};   // { 'style-id': { theme: {...}, slides: { cover: '<html>', ... } } }\nconst ICONS = {\"idea\":\"<svg viewBox=\\\"0 0 64 64\\\" stroke=\\\"currentColor\\\" stroke-width=\\\"3\\\" fill=\\\"none\\\" stroke-linecap=\\\"round\\\" stroke-linejoin=\\\"round\\\"><path d=\\\"M32 8c-9 0-16 7-16 16 0 6 3 10 7 13v7h18v-7c4-3 7-7 7-13 0-9-7-16-16-16z\\\"/><line x1=\\\"26\\\" y1=\\\"52\\\" x2=\\\"38\\\" y2=\\\"52\\\"/><line x1=\\\"28\\\" y1=\\\"58\\\" x2=\\\"36\\\" y2=\\\"58\\\"/></svg>\",\"target\":\"<svg viewBox=\\\"0 0 64 64\\\" stroke=\\\"currentColor\\\" stroke-width=\\\"3\\\" fill=\\\"none\\\" stroke-linecap=\\\"round\\\" stroke-linejoin=\\\"round\\\"><circle cx=\\\"32\\\" cy=\\\"32\\\" r=\\\"20\\\"/><circle cx=\\\"32\\\" cy=\\\"32\\\" r=\\\"12\\\"/><circle cx=\\\"32\\\" cy=\\\"32\\\" r=\\\"3\\\" fill=\\\"currentColor\\\"/></svg>\",\"money\":\"<svg viewBox=\\\"0 0 64 64\\\" stroke=\\\"currentColor\\\" stroke-width=\\\"3\\\" fill=\\\"none\\\" stroke-linecap=\\\"round\\\" stroke-linejoin=\\\"round\\\"><circle cx=\\\"32\\\" cy=\\\"32\\\" r=\\\"20\\\"/><text x=\\\"32\\\" y=\\\"42\\\" font-size=\\\"26\\\" font-weight=\\\"700\\\" text-anchor=\\\"middle\\\" fill=\\\"currentColor\\\" stroke=\\\"none\\\" font-family=\\\"Arial, Helvetica, sans-serif\\\">$</text></svg>\",\"chart\":\"<svg viewBox=\\\"0 0 64 64\\\" stroke=\\\"currentColor\\\" stroke-width=\\\"3\\\" fill=\\\"none\\\" stroke-linecap=\\\"round\\\" stroke-linejoin=\\\"round\\\"><line x1=\\\"12\\\" y1=\\\"52\\\" x2=\\\"52\\\" y2=\\\"52\\\"/><rect x=\\\"18\\\" y=\\\"34\\\" width=\\\"8\\\" height=\\\"18\\\"/><rect x=\\\"30\\\" y=\\\"24\\\" width=\\\"8\\\" height=\\\"28\\\"/><rect x=\\\"42\\\" y=\\\"14\\\" width=\\\"8\\\" height=\\\"38\\\"/></svg>\",\"rocket\":\"<svg viewBox=\\\"0 0 64 64\\\" stroke=\\\"currentColor\\\" stroke-width=\\\"3\\\" fill=\\\"none\\\" stroke-linecap=\\\"round\\\" stroke-linejoin=\\\"round\\\"><path d=\\\"M32 8c8 4 12 12 12 22 0 8-4 14-12 20-8-6-12-12-12-20 0-10 4-18 12-22z\\\"/><circle cx=\\\"32\\\" cy=\\\"26\\\" r=\\\"4\\\"/><path d=\\\"M22 40l-6 10M42 40l6 10\\\"/></svg>\",\"check\":\"<svg viewBox=\\\"0 0 64 64\\\" stroke=\\\"currentColor\\\" stroke-width=\\\"3\\\" fill=\\\"none\\\" stroke-linecap=\\\"round\\\" stroke-linejoin=\\\"round\\\"><circle cx=\\\"32\\\" cy=\\\"32\\\" r=\\\"20\\\"/><path d=\\\"M23 32l7 7 12-14\\\"/></svg>\"};     // style-4: имя → inline SVG\n\n// ---------- мини-шаблонизатор (копия carusel_dayly_agent/scripts/render.mjs) ----------\nfunction escapeHtml(str) { return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }\nfunction resolvePath(ctx, path) { if (path === '.') return ctx; return path.split('.').reduce((a, k) => (a == null ? undefined : a[k]), ctx); }\nfunction render(template, ctx) {\n  let out = template;\n  out = out.replace(/{{#each\\s+([\\w.]+)}}([\\s\\S]*?){{\\/each}}/g, (_, path, inner) => {\n    const arr = resolvePath(ctx, path); if (!Array.isArray(arr)) return '';\n    return arr.map((item, index) => render(inner, typeof item === 'object' && item !== null ? { ...ctx, ...item, this: item, '@index': index } : { ...ctx, this: item, '@index': index })).join('');\n  });\n  out = out.replace(/{{#if\\s+([\\w.]+)}}([\\s\\S]*?)(?:{{else}}([\\s\\S]*?))?{{\\/if}}/g, (_, path, t, f) => (resolvePath(ctx, path) ? render(t, ctx) : render(f || '', ctx)));\n  out = out.replace(/{{{\\s*([\\w.]+)\\s*}}}/g, (_, path) => { const v = resolvePath(ctx, path); return v == null ? '' : String(v); });\n  out = out.replace(/{{\\s*([\\w.@]+)\\s*}}/g, (_, path) => { const v = resolvePath(ctx, path); return v == null ? '' : escapeHtml(v); });\n  return out;\n}\n\n// ---------- helpers ----------\nconst clean = (s) => String(s ?? '').replace(/\\s+/g, ' ').trim();\nconst esc = (s) => escapeHtml(clean(s));\n// заголовок с выделенной фразой: accent → <span class=\"X\">\nfunction headlineWith(headline, accent, cls, br = true) {\n  let h = esc(headline);\n  const a = esc(accent);\n  if (a && h.toLowerCase().includes(a.toLowerCase())) {\n    const i = h.toLowerCase().indexOf(a.toLowerCase());\n    h = h.slice(0, i) + `<span class=\"${cls}\">` + h.slice(i, i + a.length) + '</span>' + h.slice(i + a.length);\n  }\n  return h;\n}\nfunction parseJsonLoose(raw) {\n  let s = String(raw || '').trim().replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/i, '').trim();\n  const a = s.indexOf('{'), b = s.lastIndexOf('}');\n  if (a !== -1 && b > a) s = s.slice(a, b + 1);\n  try { return JSON.parse(s); } catch (e) { return {}; }\n}\nconst pose = (p, fallback) => (POSES.includes(String(p || '').trim()) ? String(p).trim() : fallback);\nconst stickerName = (s) => String(s || '').replace(/\\.png$/i, '').replace(/[^a-z0-9_]/gi, '');\n\n// ---------- вход ----------\nconst content = $('Парсинг и валидация сценария').first().json;\nconst art = parseJsonLoose($input.first().json.text || $input.first().json.output || '');\nconst styleId = STYLES[art.style] ? art.style : DEFAULT_STYLE;\nconst style = STYLES[styleId];\nconst theme = style.theme;\nconst coverPose = pose(art.cover_pose, 'pointing');\nconst outroPose = pose(art.outro_pose, 'call_to_action');\nconst stickers = {};   // номер слайда (1-based) → имя файла\nfor (const s of Array.isArray(art.stickers) ? art.stickers : []) { const n = Number(s.slide); const name = stickerName(s.name); if (n >= 1 && name) stickers[n] = name; }\nconst icons = art.icons && typeof art.icons === 'object' ? art.icons : {};\n\nconst series = clean(content.series || 'ЛИЧНЫЙ ОПЫТ').toUpperCase();\nconst badgeIcon = clean(content.badge_icon || '🔥');\nconst cover = content.cover || {};\nconst outro = content.outro || {};\nconst points = (Array.isArray(content.points) ? content.points : []).slice(0, MAX_SLIDES - 2);\n\n// ---------- контент → слайды конкретного стиля ----------\nconst slides = [];\nconst alt = (i, a, b) => (i % 2 === 0 ? a : b);\nif (styleId === 'style-1-grid-cards') {\n  slides.push({ type: 'cover', badgeIcon, badgeText: series, headlineHtml: headlineWith(cover.headline, cover.accent, 'accent'), subtext: clean(cover.subtext),\n    stat: cover.stat && cover.stat.value ? { value: clean(cover.stat.value), desc: clean(cover.stat.desc) } : null, mascot: `${ASSETS}/characters/genesis/${coverPose}.png` });\n  points.forEach((p, i) => slides.push({ type: 'list', number: clean(p.number || String(i + 1)), headlineHtml: headlineWith(p.headline, '', '').toUpperCase(),\n    items: (Array.isArray(p.items) && p.items.length ? p.items : [p.body]).filter(Boolean).slice(0, 4).map(clean) }));\n  slides.push({ type: 'outro', headlineHtml: headlineWith(outro.headline, outro.accent, 'hl'), _mascot: `${ASSETS}/characters/genesis/${outroPose}.png` });\n} else if (styleId === 'style-2-bold-block') {\n  slides.push({ type: 'cover', bgClass: 'bg-red', headlineHtml: headlineWith(cover.headline, cover.accent, 'hl'), subtext: clean(cover.subtext) });\n  points.forEach((p, i) => slides.push({ type: 'point', bgClass: alt(i, 'bg-black', 'bg-red'), eyebrowNumber: clean(p.number || String(i + 1)).padStart(2, '0'), eyebrowText: series,\n    headlineHtml: headlineWith(p.headline, '', ''), body: clean(p.body || (Array.isArray(p.items) ? p.items.join('. ') : '')) }));\n  slides.push({ type: 'outro', bgClass: alt(points.length, 'bg-black', 'bg-red'), headlineHtml: headlineWith(outro.headline, outro.accent, 'hl'), body: clean(outro.body), _mascot: `${ASSETS}/characters/genesis/${outroPose}.png` });\n} else if (styleId === 'style-3-editorial') {\n  slides.push({ type: 'cover', bgClass: 'bg-black', headlineHtml: headlineWith(cover.headline, cover.accent, 'accent'), subtext: clean(cover.subtext) });\n  points.forEach((p, i) => slides.push({ type: 'secret', bgClass: alt(i, 'bg-cream', 'bg-black'), eyebrowLabel: `${series} ${clean(p.number || String(i + 1))}:`,\n    headlineHtml: headlineWith(p.headline, '', ''), paragraphs: (Array.isArray(p.items) && p.items.length ? p.items : [p.body]).filter(Boolean).slice(0, 4).map(clean) }));\n  slides.push({ type: 'outro', bgClass: alt(points.length, 'bg-cream', 'bg-black'), headlineHtml: headlineWith(outro.headline, outro.accent, 'accent'),\n    items: Array.isArray(outro.items) ? outro.items.map(clean) : [], paragraphs: outro.body ? [clean(outro.body)] : [], _mascot: `${ASSETS}/characters/genesis/${outroPose}.png` });\n} else { // style-4-friendly-cream\n  const iconNames = Object.keys(ICONS);\n  slides.push({ type: 'cover', pill: series, headlineHtml: headlineWith(cover.headline, cover.accent, 'b').replace(/<span class=\"b\">/g, '<b>').replace(/<\\/span>/g, '</b>'), mascot: `${ASSETS}/characters/genesis/${coverPose}.png` });\n  points.forEach((p, i) => { const ic = iconNames.includes(icons[String(i + 2)]) ? icons[String(i + 2)] : iconNames[i % iconNames.length];\n    slides.push({ type: 'point', number: clean(p.number || String(i + 1)), iconSvg: ICONS[ic], headlineHtml: headlineWith(p.headline, '', ''), card: p.body ? esc(p.body) : '',\n      paragraphs: (Array.isArray(p.items) ? p.items : []).slice(0, 4).map(clean) }); });\n  slides.push({ type: 'outro', headlineHtml: headlineWith(outro.headline, outro.accent, 'b').replace(/<span class=\"b\">/g, '<b>').replace(/<\\/span>/g, '</b>'), subtext: clean(outro.body), _mascot: `${ASSETS}/characters/genesis/${outroPose}.png` });\n}\n\n// ---------- рендер HTML + пост-обработка ----------\nconst total = slides.length;\nconst pad = (n) => String(n).padStart(2, '0');\nconst runId = Date.now();\nconst jobDir = `${JOBS_DIR}/${runId}`;\nconst out = [];\nfor (let i = 0; i < total; i++) {\n  const s = slides[i];\n  const { type, _mascot, ...fields } = s;\n  const template = style.slides[type];\n  if (!template) throw new Error(`В стиле ${styleId} нет шаблона слайда \"${type}\"`);\n  const ctx = { colors: theme.colors, fonts: theme.fonts, author: AUTHOR, series, pageCounter: `${pad(i + 1)}/${pad(total)}`, ctaText: i === total - 1 ? CTA_LAST : CTA_NEXT, debugClass: '', ...fields };\n  let html = render(template, ctx);\n  html = html\n    .replace(/<link[^>]+assets\\/fonts\\/fonts\\.css[^>]*>/g, `<link rel=\"stylesheet\" href=\"${FONTS_CSS}\">`)\n    .replace(/<link[^>]+styles\\/_zones\\.css[^>]*>/g, `<style>\\n${ZONES_CSS}\\n</style>`);\n  const extras = [];\n  // маскот на слайдах без штатного слота (все стили кроме cover style-1/style-4)\n  // маскот там, где нет штатного слота, — только на финале (короткий текст); текст ужимаем через max-width, не padding\n  if (_mascot && type === 'outro') extras.push(\n    `<style>.zone-main > *{max-width:calc(100% - 300px) !important}</style>` +\n    `<img src=\"${_mascot}\" alt=\"\" style=\"position:absolute;right:48px;bottom:210px;width:280px;height:auto;z-index:4;pointer-events:none;filter:drop-shadow(0 18px 30px rgba(0,0,0,.35))\">`);\n  // стикер арт-директора: справа сверху в MAIN-зоне, заголовок ужимаем, чтобы не пересекались\n  const st = stickers[i + 1];\n  if (st && !s.mascot && !_mascot) extras.push(\n    `<style>.zone-main h1,.zone-main h2,.zone-main .headline,.zone-main .title-row{max-width:720px}</style>` +\n    `<img src=\"${ASSETS}/stickers/${st}.png\" alt=\"\" style=\"position:absolute;right:70px;top:210px;width:230px;height:auto;z-index:5;pointer-events:none;filter:drop-shadow(0 14px 26px rgba(0,0,0,.4))\">`);\n  if (extras.length) html = html.replace('</body>', extras.join('\\n') + '\\n</body>');\n  const name = `slide_${pad(i + 1)}.html`;\n  out.push({ name, type, htmlPath: `${jobDir}/${name}`, html });\n}\n\nconst caption = clean(content.post_caption || content.title || '').replace(/ {2,}/g, ' ').slice(0, 1000);\nconst common = {\n  runId, jobDir, style: styleId, slidesCount: total, title: clean(content.title || cover.headline), series, caption,\n  coverPose, outroPose, stickers, slideTypes: out.map((o) => o.type).join(' ➜ '),\n  mkdirCommand: `mkdir -p ${jobDir}`,\n  renderCommand: `${RENDER_SHIM} ${jobDir} --quiet </dev/null`,\n  cleanupCommand: `rm -rf ${jobDir}`,\n};\nconst items = [];\nfor (const o of out) {\n  const bin = await this.helpers.prepareBinaryData(Buffer.from(o.html, 'utf-8'), o.name, 'text/html');\n  items.push({ json: { ...common, name: o.name, type: o.type, htmlPath: o.htmlPath }, binary: { data: bin } });\n}\nreturn items;\n"
+      }
+    },
+    {
+      "id": "1be740b3-4462-4816-8bab-c13a3e2769fd",
+      "position": [
+        1320,
+        0
+      ],
+      "name": "Папка задачи",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "executeOnce": true,
+      "parameters": {
+        "command": "={{ $json.mkdirCommand }}"
+      }
+    },
+    {
+      "id": "5c8a6f16-ab95-418e-bb37-5695c16844e8",
+      "position": [
+        1540,
+        0
+      ],
+      "name": "Файлы слайдов",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Повторно выдаём слайды с binary после mkdir (Execute Command выше выполняется один раз и теряет items)\nreturn $('Сборка HTML и команда рендера').all();"
+      }
+    },
+    {
+      "id": "3a630267-13a3-4e54-b529-e5cd9f80f072",
+      "position": [
+        1760,
+        0
+      ],
+      "name": "Запись HTML на диск",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "parameters": {
+        "operation": "write",
+        "fileName": "={{ $json.htmlPath }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "eb18697a-6c90-4b20-a7a6-1734f71295a8",
+      "position": [
+        1980,
+        0
+      ],
+      "name": "Рендер HTML → PNG",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "executeOnce": true,
+      "parameters": {
+        "command": "={{ $('Сборка HTML и команда рендера').first().json.renderCommand }}"
+      }
+    },
+    {
+      "id": "b83e3160-390f-459e-a84a-0c9fd13bb42a",
+      "position": [
+        2200,
+        0
+      ],
+      "name": "Разбор результата рендера",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// stdout render-html — один JSON; при --quiet прогресса нет\nconst build = $('Сборка HTML и команда рендера').first().json;\nconst cfg = $('Конфиг').first().json;\nconst stdout = String($input.first().json.stdout || '').trim();\nlet r; try { r = JSON.parse(stdout.split('\\n').pop()); } catch (e) { throw new Error('render-html вернул не JSON: ' + stdout.slice(-400) + ' | stderr: ' + String($input.first().json.stderr || '').slice(-400)); }\nif (!r.ok) throw new Error('render-html: ' + r.error);\nreturn r.slides.map((s, i) => { const nn = String(i + 1).padStart(2, '0'); const key = `carousel/${build.runId}/slide_${nn}.png`;\n  return { json: { n: i + 1, png: s.png, bytes: s.bytes, key, url: `${cfg.s3_url}/${cfg.s3_bucket}/${key}`, ms: r.ms, count: r.count } }; });"
+      }
+    },
+    {
+      "id": "8ab3515e-4b1a-4baa-bc2e-af415ece5a85",
+      "position": [
+        2420,
+        0
+      ],
+      "name": "Чтение PNG с диска",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "parameters": {
+        "fileSelector": "={{ $json.png }}",
+        "options": {
+          "dataPropertyName": "data"
+        }
+      }
+    },
+    {
+      "id": "616fcb1e-3db1-4795-856b-a0ac0f1c3110",
+      "position": [
+        2640,
+        0
+      ],
+      "name": "S3 · Загрузка PNG",
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "parameters": {
+        "operation": "upload",
+        "bucketName": "={{ $('Конфиг').first().json.s3_bucket }}",
+        "fileName": "={{ $('Разбор результата рендера').item.json.key }}",
+        "additionalFields": {
+          "acl": "publicRead"
+        }
+      },
+      "credentials": {
+        "s3": {
+          "id": "BSr0GYMWTTlMKEH1",
+          "name": "S3Beget"
+        }
+      }
+    },
+    {
+      "id": "0fdbced7-036b-49e6-a96a-e00c1a8c9668",
+      "position": [
+        2860,
+        0
+      ],
+      "name": "Сбор ссылок для альбома",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Собираем альбом для Telegram (до 10 фото, подпись на первом)\nconst cfg = $('Конфиг').first().json;\nconst build = $('Сборка HTML и команда рендера').first().json;\nconst files = $('Разбор результата рендера').all().map(i => i.json).sort((a, b) => a.n - b.n).slice(0, 10);\nconst caption = String(build.caption || build.title || '').slice(0, 1000);\nconst media = files.map((f, i) => ({ type: 'photo', media: f.url, additionalFields: i === 0 ? { caption } : {} }));\nreturn [{ json: { chat_id: $('INPUT').first().json.chat_id, count: files.length, urls: files.map(f => f.url), caption, mediaGroup: { media } } }];"
+      }
+    },
+    {
+      "id": "28c0043a-87ab-48b1-8634-dbd5232fbca4",
+      "position": [
+        3080,
+        0
+      ],
+      "name": "Размер альбома",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "sz2",
+                    "leftValue": "={{ $json.count }}",
+                    "rightValue": 2,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "2"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "sz3",
+                    "leftValue": "={{ $json.count }}",
+                    "rightValue": 3,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "3"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "sz4",
+                    "leftValue": "={{ $json.count }}",
+                    "rightValue": 4,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "4"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "sz5",
+                    "leftValue": "={{ $json.count }}",
+                    "rightValue": 5,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "5"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "sz6",
+                    "leftValue": "={{ $json.count }}",
+                    "rightValue": 6,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "6"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "sz7",
+                    "leftValue": "={{ $json.count }}",
+                    "rightValue": 7,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "7"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "sz8",
+                    "leftValue": "={{ $json.count }}",
+                    "rightValue": 8,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "8"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "sz9",
+                    "leftValue": "={{ $json.count }}",
+                    "rightValue": 9,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "9"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "sz10",
+                    "leftValue": "={{ $json.count }}",
+                    "rightValue": 10,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "10"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "sz1",
+                    "leftValue": "={{ $json.count }}",
+                    "rightValue": 1,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "1"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d878e968-f98b-408e-a07c-20c24cca2718",
+      "position": [
+        3300,
+        -900
+      ],
+      "name": "Альбом × 2",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "parameters": {
+        "operation": "sendMediaGroup",
+        "chatId": "={{ $json.chat_id }}",
+        "media": {
+          "media": [
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[0] }}",
+              "additionalFields": {
+                "caption": "={{ $json.caption }}"
+              }
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[1] }}",
+              "additionalFields": {}
+            }
+          ]
+        },
+        "additionalFields": {}
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "ogiJfZHCx5LEOPIe",
+          "name": "🤖 GENESIS CONTENT BOT | @genesis_content_bot"
+        }
+      }
+    },
+    {
+      "id": "1f9a517a-4131-4ccb-ae50-55e047ea171e",
+      "position": [
+        3300,
+        -700
+      ],
+      "name": "Альбом × 3",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "parameters": {
+        "operation": "sendMediaGroup",
+        "chatId": "={{ $json.chat_id }}",
+        "media": {
+          "media": [
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[0] }}",
+              "additionalFields": {
+                "caption": "={{ $json.caption }}"
+              }
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[1] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[2] }}",
+              "additionalFields": {}
+            }
+          ]
+        },
+        "additionalFields": {}
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "ogiJfZHCx5LEOPIe",
+          "name": "🤖 GENESIS CONTENT BOT | @genesis_content_bot"
+        }
+      }
+    },
+    {
+      "id": "e58b101a-3baa-42ea-b226-519e14d258f5",
+      "position": [
+        3300,
+        -500
+      ],
+      "name": "Альбом × 4",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "parameters": {
+        "operation": "sendMediaGroup",
+        "chatId": "={{ $json.chat_id }}",
+        "media": {
+          "media": [
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[0] }}",
+              "additionalFields": {
+                "caption": "={{ $json.caption }}"
+              }
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[1] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[2] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[3] }}",
+              "additionalFields": {}
+            }
+          ]
+        },
+        "additionalFields": {}
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "ogiJfZHCx5LEOPIe",
+          "name": "🤖 GENESIS CONTENT BOT | @genesis_content_bot"
+        }
+      }
+    },
+    {
+      "id": "adf9f4b2-5d30-48bd-abfb-42edd558f894",
+      "position": [
+        3300,
+        -300
+      ],
+      "name": "Альбом × 5",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "parameters": {
+        "operation": "sendMediaGroup",
+        "chatId": "={{ $json.chat_id }}",
+        "media": {
+          "media": [
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[0] }}",
+              "additionalFields": {
+                "caption": "={{ $json.caption }}"
+              }
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[1] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[2] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[3] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[4] }}",
+              "additionalFields": {}
+            }
+          ]
+        },
+        "additionalFields": {}
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "ogiJfZHCx5LEOPIe",
+          "name": "🤖 GENESIS CONTENT BOT | @genesis_content_bot"
+        }
+      }
+    },
+    {
+      "id": "4fa6648c-2f61-41a0-86d1-aee72e2289ba",
+      "position": [
+        3300,
+        -100
+      ],
+      "name": "Альбом × 6",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "parameters": {
+        "operation": "sendMediaGroup",
+        "chatId": "={{ $json.chat_id }}",
+        "media": {
+          "media": [
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[0] }}",
+              "additionalFields": {
+                "caption": "={{ $json.caption }}"
+              }
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[1] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[2] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[3] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[4] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[5] }}",
+              "additionalFields": {}
+            }
+          ]
+        },
+        "additionalFields": {}
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "ogiJfZHCx5LEOPIe",
+          "name": "🤖 GENESIS CONTENT BOT | @genesis_content_bot"
+        }
+      }
+    },
+    {
+      "id": "a3720643-a724-4007-8328-7c27b531d35b",
+      "position": [
+        3300,
+        100
+      ],
+      "name": "Альбом × 7",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "parameters": {
+        "operation": "sendMediaGroup",
+        "chatId": "={{ $json.chat_id }}",
+        "media": {
+          "media": [
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[0] }}",
+              "additionalFields": {
+                "caption": "={{ $json.caption }}"
+              }
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[1] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[2] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[3] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[4] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[5] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[6] }}",
+              "additionalFields": {}
+            }
+          ]
+        },
+        "additionalFields": {}
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "ogiJfZHCx5LEOPIe",
+          "name": "🤖 GENESIS CONTENT BOT | @genesis_content_bot"
+        }
+      }
+    },
+    {
+      "id": "8715a536-d9ba-483a-a16d-a1179b83ffd4",
+      "position": [
+        3300,
+        300
+      ],
+      "name": "Альбом × 8",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "parameters": {
+        "operation": "sendMediaGroup",
+        "chatId": "={{ $json.chat_id }}",
+        "media": {
+          "media": [
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[0] }}",
+              "additionalFields": {
+                "caption": "={{ $json.caption }}"
+              }
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[1] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[2] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[3] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[4] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[5] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[6] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[7] }}",
+              "additionalFields": {}
+            }
+          ]
+        },
+        "additionalFields": {}
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "ogiJfZHCx5LEOPIe",
+          "name": "🤖 GENESIS CONTENT BOT | @genesis_content_bot"
+        }
+      }
+    },
+    {
+      "id": "c2a4548b-476c-4123-8d73-bcccbf29f9c8",
+      "position": [
+        3300,
+        500
+      ],
+      "name": "Альбом × 9",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "parameters": {
+        "operation": "sendMediaGroup",
+        "chatId": "={{ $json.chat_id }}",
+        "media": {
+          "media": [
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[0] }}",
+              "additionalFields": {
+                "caption": "={{ $json.caption }}"
+              }
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[1] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[2] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[3] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[4] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[5] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[6] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[7] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[8] }}",
+              "additionalFields": {}
+            }
+          ]
+        },
+        "additionalFields": {}
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "ogiJfZHCx5LEOPIe",
+          "name": "🤖 GENESIS CONTENT BOT | @genesis_content_bot"
+        }
+      }
+    },
+    {
+      "id": "5278f23b-2c99-47a6-bd35-60efde613430",
+      "position": [
+        3300,
+        700
+      ],
+      "name": "Альбом × 10",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "parameters": {
+        "operation": "sendMediaGroup",
+        "chatId": "={{ $json.chat_id }}",
+        "media": {
+          "media": [
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[0] }}",
+              "additionalFields": {
+                "caption": "={{ $json.caption }}"
+              }
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[1] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[2] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[3] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[4] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[5] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[6] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[7] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[8] }}",
+              "additionalFields": {}
+            },
+            {
+              "type": "photo",
+              "media": "={{ $json.urls[9] }}",
+              "additionalFields": {}
+            }
+          ]
+        },
+        "additionalFields": {}
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "ogiJfZHCx5LEOPIe",
+          "name": "🤖 GENESIS CONTENT BOT | @genesis_content_bot"
+        }
+      }
+    },
+    {
+      "id": "ffccbf9d-ccb9-43cd-bed3-7ecc63c2797d",
+      "position": [
+        3300,
+        900
+      ],
+      "name": "Одно фото",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "parameters": {
+        "operation": "sendPhoto",
+        "chatId": "={{ $json.chat_id }}",
+        "file": "={{ $json.urls[0] }}",
+        "additionalFields": {
+          "caption": "={{ $json.caption }}"
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "ogiJfZHCx5LEOPIe",
+          "name": "🤖 GENESIS CONTENT BOT | @genesis_content_bot"
+        }
+      }
+    },
+    {
+      "id": "359de573-5cec-4a14-bc5f-d458cb4ab605",
+      "position": [
+        3560,
+        0
+      ],
+      "name": "Очистка временных файлов",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "executeOnce": true,
+      "parameters": {
+        "command": "={{ $('Сборка HTML и команда рендера').first().json.cleanupCommand }}"
+      }
+    },
+    {
+      "id": "9e33106d-5ff6-4958-84aa-028e662f8a13",
+      "position": [
+        3780,
+        0
+      ],
+      "name": "Форматирование ответа в Чат",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const b = $('Сборка HTML и команда рендера').first().json;\nconst links = $('Сбор ссылок для альбома').first().json;\nreturn { json: { status: 'success',\n  message: `🎠 Карусель создана и отправлена в Telegram!\\n\\n📌 Заголовок: ${b.title}\\n🎨 Стиль: ${b.style}\\n🖼 Слайдов: ${links.count} (${b.slideTypes})\\n🤖 Позы маскота: ${b.coverPose} → ${b.outroPose}\\n✨ Стикеры: ${Object.entries(b.stickers || {}).map(([k, v]) => k + ':' + v).join(', ') || 'нет'}\\n☁️ PNG в S3: carousel/${b.runId}/\\n🧹 Временная папка на сервере удалена.`,\n  title: b.title, style: b.style, slides: links.count, urls: links.urls, caption: links.caption, runId: b.runId } };"
+      }
+    }
+  ],
+  "connections": {
+    "INPUT": {
+      "main": [
+        [
+          {
+            "node": "Конфиг",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Конфиг": {
+      "main": [
+        [
+          {
+            "node": "Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Type": {
+      "main": [
+        [
+          {
+            "node": "AI-Исследователь и 5 Хуков",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI-Адаптер готового текста",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI-Исследователь и 5 Хуков": {
+      "main": [
+        [
+          {
+            "node": "AI-Судья: Выбор лучшего хука",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI-Судья: Выбор лучшего хука": {
+      "main": [
+        [
+          {
+            "node": "AI-Копирайтер каруселей",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI-Копирайтер каруселей": {
+      "main": [
+        [
+          {
+            "node": "Парсинг и валидация сценария",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI-Адаптер готового текста": {
+      "main": [
+        [
+          {
+            "node": "Парсинг и валидация сценария",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Парсинг и валидация сценария": {
+      "main": [
+        [
+          {
+            "node": "AI-Арт-директор",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI-Арт-директор": {
+      "main": [
+        [
+          {
+            "node": "Сборка HTML и команда рендера",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Сборка HTML и команда рендера": {
+      "main": [
+        [
+          {
+            "node": "Папка задачи",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Папка задачи": {
+      "main": [
+        [
+          {
+            "node": "Файлы слайдов",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Файлы слайдов": {
+      "main": [
+        [
+          {
+            "node": "Запись HTML на диск",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Запись HTML на диск": {
+      "main": [
+        [
+          {
+            "node": "Рендер HTML → PNG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Рендер HTML → PNG": {
+      "main": [
+        [
+          {
+            "node": "Разбор результата рендера",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Разбор результата рендера": {
+      "main": [
+        [
+          {
+            "node": "Чтение PNG с диска",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Чтение PNG с диска": {
+      "main": [
+        [
+          {
+            "node": "S3 · Загрузка PNG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S3 · Загрузка PNG": {
+      "main": [
+        [
+          {
+            "node": "Сбор ссылок для альбома",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Сбор ссылок для альбома": {
+      "main": [
+        [
+          {
+            "node": "Размер альбома",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Размер альбома": {
+      "main": [
+        [
+          {
+            "node": "Альбом × 2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Альбом × 3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Альбом × 4",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Альбом × 5",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Альбом × 6",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Альбом × 7",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Альбом × 8",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Альбом × 9",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Альбом × 10",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Одно фото",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Альбом × 2": {
+      "main": [
+        [
+          {
+            "node": "Очистка временных файлов",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Альбом × 3": {
+      "main": [
+        [
+          {
+            "node": "Очистка временных файлов",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Альбом × 4": {
+      "main": [
+        [
+          {
+            "node": "Очистка временных файлов",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Альбом × 5": {
+      "main": [
+        [
+          {
+            "node": "Очистка временных файлов",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Альбом × 6": {
+      "main": [
+        [
+          {
+            "node": "Очистка временных файлов",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Альбом × 7": {
+      "main": [
+        [
+          {
+            "node": "Очистка временных файлов",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Альбом × 8": {
+      "main": [
+        [
+          {
+            "node": "Очистка временных файлов",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Альбом × 9": {
+      "main": [
+        [
+          {
+            "node": "Очистка временных файлов",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Альбом × 10": {
+      "main": [
+        [
+          {
+            "node": "Очистка временных файлов",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Одно фото": {
+      "main": [
+        [
+          {
+            "node": "Очистка временных файлов",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Очистка временных файлов": {
+      "main": [
+        [
+          {
+            "node": "Форматирование ответа в Чат",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Model (Копирайтер)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI-Исследователь и 5 Хуков",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "AI-Судья: Выбор лучшего хука",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "AI-Копирайтер каруселей",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "AI-Адаптер готового текста",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Model (Арт-директор)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI-Арт-директор",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jina AI Search": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI-Исследователь и 5 Хуков",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Brave Search": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI-Исследователь и 5 Хуков",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Vector Store": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI-Исследователь и 5 Хуков",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Supabase Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "saveDataSuccessExecution": "all",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "errorWorkflow": "QAdyGue9xyjbDecA"
+  }
+}

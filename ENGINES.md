@@ -72,20 +72,12 @@ docker exec -it n8n-media-render sh -lc 'cd /data/studio-engine && npm run typec
 ```
 stdout — один JSON: `{ok, engine, jobDir, out, width, height, scale, count, ms, slides:[{html, png, bytes}]}`; при ошибке `{ok:false, error}` и код 1. Прогресс — в stderr (не мешает парсить stdout, если в Execute Command не склеивать `2>&1`).
 
-**Как вызывает n8n** (воркфлоу каруселей — следующая задача; контракт такой).
-1. Code-нода собирает HTML каждого слайда (шаблон + стили лежат в самой ноде), пишет их в папку задачи через base64 — так же, как маскот пишет `props.json`:
-   ```js
-   const runId = Date.now();
-   const jobDir = `/data/carousel/jobs/${runId}`;
-   const writes = slides.map((html, i) =>
-     `echo '${Buffer.from(html,'utf-8').toString('base64')}' | base64 -d > ${jobDir}/slide_${String(i+1).padStart(2,'0')}.html`
-   ).join(' && ');
-   const renderCommand = `mkdir -p ${jobDir} && ${writes} && /opt/shims/render-html ${jobDir} --quiet`;
-   const cleanupCommand = `rm -rf ${jobDir}`;
-   ```
-2. Execute Command выполняет `renderCommand`. Code-нода: `const r = JSON.parse($json.stdout); if (!r.ok) throw new Error(r.error);` → `r.slides[i].png`.
-3. Read Binary File по каждому `png` (путь `/data/...` разрешён `N8N_RESTRICT_FILE_ACCESS_TO=/data`) → публикация (Pinterest / Instagram / Telegram).
-4. Execute Command `cleanupCommand`.
+**Как вызывает n8n** — воркфлоу `56 🎠 [КАРУСЕЛЬ] МОЙ МАСКОТ` (id `c2KPuvgqGy1suliL`, JSON в `workflows/mcarousel-genesis.json`). Вход из бота GENESIS: `/mcarousel` → статус `MCAROUSEL_TEXT` / `MCAROUSEL_LLM` → `1 START GENESIS` → Execute Workflow с `chat_id`, `text`, `status`. Контракт:
+1. LLM-блок как у маскота (Исследователь с Jina/Brave/Supabase → Судья → Копирайтер, либо Адаптер готового текста) → JSON контента (обложка, 3–7 смысловых слайдов, финал, подпись поста) → Арт-директор (стиль из 4, позы маскота, стикеры).
+2. Code-нода «Сборка HTML и команда рендера»: шаблоны 4 стилей + `_zones.css` вшиты в ноду; на выходе по одному item на слайд с binary HTML. Далее Execute Command `mkdir -p /data/carousel/jobs/<runId>` → Write File `slide_NN.html` (через Write File, а не `echo base64 | …`: у одного аргумента shell лимит 128 KB, 8 слайдов HTML в base64 в него не влезают).
+3. Execute Command `/opt/shims/render-html /data/carousel/jobs/<runId> --quiet </dev/null` → Code: `JSON.parse($json.stdout)` → `slides[].png`.
+4. Read File по каждому PNG → S3 upload `carousel/<runId>/slide_NN.png` (publicRead) → Telegram `sendMediaGroup` по URL. Нюанс: fixedCollection в n8n не принимает массив из expression, поэтому Switch по числу слайдов → ноды «Альбом × N» (N = 2…10, генерируются сборщиком).
+5. Execute Command `rm -rf /data/carousel/jobs/<runId>` → ответ в чат.
 
 **Что n8n пишет в `/data` до вызова:** `carousel/jobs/<runId>/slide_NN.html`. **Что читает после:** `carousel/jobs/<runId>/slide_NN.png`.
 
