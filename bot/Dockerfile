@@ -7,7 +7,8 @@ RUN apk add --no-cache \
   curl \
   docker-cli \
   coreutils \
-  procps
+  procps \
+  jq
 
 # Создаем рабочую директорию
 WORKDIR /app

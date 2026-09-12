@@ -1,0 +1,19 @@
+{
+  "name": "html-render",
+  "version": "1.0.0",
+  "description": "HTML → PNG движок для n8n (карусели, обложки): puppeteer-core + системный Chromium из образа n8n-media-render",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "render-html": "./render.mjs"
+  },
+  "scripts": {
+    "render": "node render.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "puppeteer-core": "^25.10.0"
+  }
+}

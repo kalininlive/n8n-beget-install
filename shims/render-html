@@ -1,0 +1,2 @@
+#!/bin/sh
+exec docker exec -i n8n-media-render node /opt/engines/html-render/render.mjs "$@"

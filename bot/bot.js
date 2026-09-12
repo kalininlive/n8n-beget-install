@@ -100,35 +100,22 @@ bot.onText(/\/backups/, (msg) => {
 bot.onText(/\/update/, (msg) => {
   if (!isAuthorized(msg)) return;
 
-  send('⏳ Сначала делаю резервную копию перед обновлением...');
+  send('🔄 Начинаю обновление n8n...');
 
-  const backupScriptPath = path.resolve('/opt/n8n-install/backup_n8n.sh');
-
-  exec(`/bin/bash ${backupScriptPath}`, (error, stdout, stderr) => {
-    if (error) {
-      send(`❌ Ошибка при запуске backup:\n\`\`\`\n${error.message}\n\`\`\`\nОбновление прервано.`, { parse_mode: 'Markdown' });
-      return;
-    }
-
-    send('✅ Бэкап завершён. Начинаю обновление n8n...');
-
-    try {
-      const latest = execSync('npm view n8n version').toString().trim();
-      const current = execSync('docker exec n8n-app n8n -v').toString().trim();
-
-      if (latest === current) {
-        send(`✅ У вас уже последняя версия n8n (${current})`);
-      } else {
-        send(`⏬ Обновляю n8n с ${current} до ${latest}...`);
-        execSync('docker pull n8nio/n8n');
-        execSync('docker-compose stop n8n');
-        execSync('docker-compose rm -f n8n');
-        execSync('docker-compose up -d --no-deps --build n8n');
-        send(`✅ n8n обновлён до версии ${latest}`);
-      }
-    } catch (err) {
-      send('❌ Обновление завершилось с ошибкой');
-    }
+  const { exec } = require('child_process');
+  const cmd = `
+    if [ -x /opt/n8n-install/update_n8n.sh ]; then
+      /bin/bash /opt/n8n-install/update_n8n.sh;
+    elif [ -x /opt/n8n-install/updaten8n.sh ]; then
+      /bin/bash /opt/n8n-install/updaten8n.sh;
+    else
+      echo 'SCRIPT_NOT_FOUND'; exit 127;
+    fi
+  `;
+  exec(cmd, (error, stdout, stderr) => {
+    if (error) return send(`❌ Обновление завершилось с ошибкой:\n${error.message}`);
+    if (stderr) send(`⚠️ Предупреждение:\n${stderr}`);
+    send(`✅ Обновление завершено:\n${stdout}`);
   });
 });
 

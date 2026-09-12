@@ -1,0 +1,29 @@
+# секреты и локальное состояние сервера — никогда не коммитим
+.env
+.env.*
+!.env.template
+bot/.env
+*.bak
+*.bak.*
+*.bak_*
+*.save
+*.orig
+*.log
+backup.log
+default
+
+# данные, бэкапы, сертификаты, логи
+data/
+backups/
+logs/
+letsencrypt/
+traefik_dynamic/
+docker-plugins/
+
+# зависимости
+node_modules/
+bot/node_modules/
+engines/*/node_modules/
+
+# локальные копии документации сервера (источник — moy-n8n)
+SERVER_PROFILE.md

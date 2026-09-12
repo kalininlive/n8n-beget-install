@@ -1,0 +1,15 @@
+# Используем стабильный базовый образ Alpine
+FROM alpine:3.20
+
+# Устанавливаем системные пакеты и зависимости.
+# - yt-dlp: устанавливаем напрямую через apk, чтобы избежать проблем с PEP 668.
+# - x264-libs: добавляем поддержку кодека libx264 для ffmpeg.
+RUN apk add --no-cache \
+    ffmpeg \
+    fontconfig \
+    python3 \
+    yt-dlp \
+    ca-certificates \
+    bash \
+    docker-cli \
+    x264-libs

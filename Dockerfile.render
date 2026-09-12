@@ -1,0 +1,45 @@
+# Образ n8n-media-render: движки рендера для n8n (см. ENGINES.md / STACK.md)
+#   - remotion / @remotion/cli / hyperframes  → маскот-видео (/data/studio-engine)
+#   - engines/html-render (puppeteer-core)     → HTML → PNG карусели
+# Chromium системный (/usr/bin/chromium), ни один пакет браузер не скачивает.
+# Пересборка: docker compose build n8n-media-render && docker compose up -d n8n-media-render
+
+FROM node:22-bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    chromium \
+    ffmpeg \
+    python3 \
+    python3-pip \
+    python3-venv \
+    fontconfig \
+    fonts-inter \
+    fonts-noto \
+    fonts-dejavu \
+    fonts-freefont-ttf \
+    ca-certificates \
+    curl \
+    git \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Google Rubik font
+RUN mkdir -p /usr/share/fonts/truetype/rubik && \
+    curl -sL "https://github.com/google/fonts/raw/main/ofl/rubik/Rubik%5Bwght%5D.ttf" -o /usr/share/fonts/truetype/rubik/Rubik-VariableFont_wght.ttf && \
+    fc-cache -f -v
+
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV CHROMIUM_PATH=/usr/bin/chromium
+
+# Движок маскота (Remotion CLI глобально; сам проект живёт в томе /data/studio-engine)
+RUN npm install -g @remotion/cli remotion hyperframes
+
+# Движок html-render (карусели): версионируется вместе с этим Dockerfile
+COPY engines/html-render /opt/engines/html-render
+RUN cd /opt/engines/html-render && npm ci --omit=dev && node render.mjs --version
+
+WORKDIR /data/studio-engine
+
+CMD ["sh", "-lc", "sleep infinity"]

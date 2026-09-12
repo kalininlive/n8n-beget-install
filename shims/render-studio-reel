@@ -1,0 +1,2 @@
+#!/bin/sh
+exec docker exec -i n8n-media-render python3 /data/studio-engine/scripts/render_studio_reel.py "$@"
