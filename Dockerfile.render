@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fontconfig \
     fonts-inter \
     fonts-noto \
+    fonts-noto-color-emoji 
     fonts-dejavu \
     fonts-freefont-ttf \
     ca-certificates \
