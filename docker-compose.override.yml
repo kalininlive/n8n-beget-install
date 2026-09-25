@@ -27,6 +27,8 @@ services:
       TELEGRAM_STAT: "true"
     volumes:
       - telegram-bot-data:/var/lib/telegram-bot-api
+      # отправка файлов с диска до 2 ГБ: в n8n file = "file:///data/…" (по URL лимит 20 МБ и у локального сервера)
+      - /opt/n8n-install/data:/data:ro
     ports:
       - "127.0.0.1:8081:8081"
   telegram-bot-api-proxy:
