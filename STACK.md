@@ -21,6 +21,7 @@
 | `searxng` | override: `ghcr.io/searxng/searxng:latest` + `searxng-settings.yml` (JSON API) | `./searxng-settings.yml:/etc/searxng/settings.yml:ro` | — | n8n AI Assistant «web search» (`http://searxng:8080`) | `docker exec n8n-app wget -qO- 'http://searxng:8080/search?q=n8n&format=json'` | `docker compose pull searxng && up -d searxng` |
 | `sandbox-certs` → `sandbox-api` → `sandbox-runner-1` | override: `ghcr.io/n8n-io/n8n-sandbox-service-{api,runner-dind}:1.2.0` | том `sandbox-tls`; `env_file: .env` | — | n8n AI Assistant «code sandbox» (`http://sandbox-api:8080`, ключ `SANDBOX_API_KEYS`) | `docker exec n8n-app wget -qO- http://sandbox-api:8080/healthz` | поднять версию образов в override, `docker compose up -d sandbox-api sandbox-runner-1` |
 | `telegram-bot-api` | override: `aiogram/telegram-bot-api:latest` | том `telegram-bot-data:/var/lib/telegram-bot-api`; в n8n `/data/telegram-files` | — | Снятие лимитов Telegram Bot API (до 2 ГБ) на скачивание/отправку | `docker exec n8n-app wget -S -O- http://telegram-bot-api:8081 2>&1 \| grep 404` | `docker compose pull telegram-bot-api && up -d telegram-bot-api` |
+| `telegram-bot-api-proxy` | override: `nginx:1.27-alpine` + `telegram-bot-api/nginx.conf` | том `telegram-bot-data:ro` | — | **Base URL кредов Telegram в n8n: `http://telegram-bot-api-proxy`.** API → `telegram-bot-api:8081`; `/file/bot<token>/<абсолютный путь>` отдаёт с диска (в `--local` Bot API файлы по HTTP не отдаёт, без прокси ноды «Download file» ломаются) | `docker exec n8n-app wget -S -O- http://telegram-bot-api-proxy/ 2>&1 \| grep 404` | `docker compose up -d telegram-bot-api-proxy` |
 | `rsshub-app`, `rsshub-redis` | **не в этом репо** — отдельный compose в `/opt/rsshub` | — | — | парсинг RSS соцсетей | `docker ps \| grep rsshub` | отдельно |
 
 Шимы — файлы в `shims/`, одна строка каждый: `exec docker exec -i <container> <cmd> "$@"`. Внутри n8n они видны как `/opt/shims/<name>` (и `ffmpeg`/`python`/`yt-dlp` дополнительно как `/usr/bin/...`). Новый шим = новый файл в `shims/` + `chmod +x`, контейнеры перезапускать не нужно (папка смонтирована).
@@ -81,3 +82,13 @@
 4. Альтернатива для «коробки» клиенту без доступа к репо: `engines/studio-engine.tar.gz` (≈300 MB) в релизах GitHub (`gh release upload`), `install-extras.sh` скачивает по `STUDIO_ENGINE_URL` из `.env`.
 
 Рекомендация: вариант 1+2 (git + LFS для ассетов) — версионируемо, `git pull` на сервере = обновление движка.
+
+
+## 6. Перевод бота на локальный Telegram Bot API (до 2 ГБ)
+
+1. В n8n найти **все** креды с токеном бота (их может быть несколько с разными именами) — `n8n export:credentials --all --decrypted` внутри n8n-app, сравнить `accessToken`, файл сразу удалить.
+2. Бэкап этих кредов (`n8n export:credentials --id=<id>`), затем `baseUrl = http://telegram-bot-api-proxy` (`import:credentials` с изменённым JSON).
+3. `https://api.telegram.org/bot<token>/logOut` — после этого облако бота не обслуживает (вернуть можно не раньше чем через 10 минут: `logOut` на локальном + вызовы на api.telegram.org).
+4. Деактивировать и активировать воркфлоу с Telegram Trigger — n8n сам вызовет `setWebhook` через локальный сервер. Проверка: `getWebhookInfo` через прокси.
+5. HTTP-запросы с токеном, вшитым в URL `api.telegram.org`, после `logOut` перестают работать — найти и перевести на прокси заранее.
+Пример: @genesis_content_bot (кред `VuynFjARrXpGjLon` + `ogiJfZHCx5LEOPIe`, ~58 воркфлоу) переведён 25.09.2026.

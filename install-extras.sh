@@ -56,7 +56,7 @@ prepare_env() {
   # NO_PROXY: каждый внутренний сервис — в начало списка (иначе 502 через внешний прокси)
   local current changed=0 host
   grep -q '^NO_PROXY=' .env || echo "NO_PROXY=localhost,127.0.0.1,::1" >> .env
-  for host in faster-whisper telegram-bot-api n8n-tools n8n-media-render searxng sandbox-runner-1 sandbox-api edge-tts; do
+  for host in faster-whisper telegram-bot-api-proxy telegram-bot-api n8n-tools n8n-media-render searxng sandbox-runner-1 sandbox-api edge-tts; do
     current=$(grep '^NO_PROXY=' .env | cut -d= -f2-)
     if ! echo ",$current," | grep -q ",$host,"; then
       sed -i "s|^NO_PROXY=|NO_PROXY=${host},|" .env
@@ -87,7 +87,7 @@ start_services() {
   log "3/4 запуск сервисов из docker-compose.override.yml"
   docker compose up -d sandbox-certs
   docker wait sandbox-certs >/dev/null 2>&1 || true
-  docker compose up -d sandbox-api sandbox-runner-1 searxng edge-tts telegram-bot-api faster-whisper n8n-tools
+  docker compose up -d sandbox-api sandbox-runner-1 searxng edge-tts telegram-bot-api telegram-bot-api-proxy faster-whisper n8n-tools
   whisper_model
   if ! docker image inspect n8n-install-n8n-media-render:latest >/dev/null 2>&1; then
     log "  сборка образа n8n-media-render (5-10 минут)..."
@@ -125,7 +125,7 @@ check_all() {
       echo "  ❌ $name: $(printf '%s' "$out" | tail -n 2)"; fails=$((fails+1))
     fi
   }
-  chk "контейнеры"          sh -c 'for c in n8n-app n8n-worker n8n-postgres n8n-redis n8n-traefik n8n-tools n8n-media-render edge-tts searxng sandbox-api sandbox-runner-1 telegram-bot-api faster-whisper; do docker inspect -f "{{.State.Running}}" "$c" 2>/dev/null | grep -q true || { echo "не запущен: $c"; exit 1; }; done; echo "все запущены"'
+  chk "контейнеры"          sh -c 'for c in n8n-app n8n-worker n8n-postgres n8n-redis n8n-traefik n8n-tools n8n-media-render edge-tts searxng sandbox-api sandbox-runner-1 telegram-bot-api telegram-bot-api-proxy faster-whisper; do docker inspect -f "{{.State.Running}}" "$c" 2>/dev/null | grep -q true || { echo "не запущен: $c"; exit 1; }; done; echo "все запущены"'
   chk "n8n healthz"         docker exec n8n-app wget -qO- http://localhost:5678/healthz
   chk "remotion (шим)"      sh -c "./shims/remotion --help | head -n 1"
   chk "render-html (шим)"   ./shims/render-html --version
@@ -134,6 +134,7 @@ check_all() {
   chk "searxng из n8n"      docker exec n8n-app wget -qO- 'http://searxng:8080/search?q=n8n&format=json'
   chk "sandbox из n8n"      docker exec n8n-app wget -qO- http://sandbox-api:8080/healthz
   chk "telegram-bot-api"    sh -c 'docker exec n8n-app wget -S -O- http://telegram-bot-api:8081 2>&1 | grep -q "HTTP/1.1 404" && echo "HTTP 404 OK"'
+  chk "telegram-bot-api-proxy" sh -c 'docker exec n8n-app wget -S -O- http://telegram-bot-api-proxy/ 2>&1 | grep -q "HTTP/1.1 404" && echo "HTTP 404 OK (прокси → Bot API)"'
   chk "telegram тома n8n"   docker exec n8n-app sh -c 'test -d /data/telegram-files && test -d /var/lib/telegram-bot-api && echo "смонтированы"'
   chk "faster-whisper из n8n" docker exec n8n-app wget -qO- http://faster-whisper:8000/health
   chk "whisper модель"      sh -c 'm=$(grep "^WHISPER_MODEL=" .env | cut -d= -f2-); docker exec faster-whisper curl -sf "http://localhost:8000/v1/models/$m" >/dev/null && echo "$m скачана"'
