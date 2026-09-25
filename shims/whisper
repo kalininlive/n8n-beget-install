@@ -1,13 +1,13 @@
 #!/bin/sh
 # whisper <файл в /data> [язык ru|en|…] [модель] → JSON (verbose_json) с текстом, сегментами и пословными таймкодами.
 # Пример из n8n Execute Command: whisper /data/genesis/123_456/video.mp4 ru
-# Файл должен лежать в /data (общий том). Без языка — автоопределение. Модель по умолчанию — WHISPER_MODEL из .env.
+# Файл — в /data (общий том) или путь из getFile локального Bot API (/var/lib/telegram-bot-api/...). Без языка — автоопределение. Модель по умолчанию — WHISPER_MODEL из .env.
 if [ -z "$1" ] || [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
   echo "usage: whisper <file in /data> [language] [model]"; exit 0
 fi
 exec docker exec -i faster-whisper sh -c '
   f="$1"; lang="$2"; model="${3:-$WHISPER_MODEL}"
-  [ -f "$f" ] || { echo "{\"error\":\"файл не найден: $f (нужен путь в /data)\"}"; exit 1; }
+  [ -f "$f" ] || { echo "{\"error\":\"файл не найден: $f (нужен путь в /data или /var/lib/telegram-bot-api)\"}"; exit 1; }
   set -- -sS --fail-with-body --max-time 3600 http://localhost:8000/v1/audio/transcriptions \
     -F "file=@$f" -F "model=$model" -F response_format=verbose_json \
     -F "timestamp_granularities[]=word" -F "timestamp_granularities[]=segment"

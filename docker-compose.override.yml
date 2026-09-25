@@ -157,6 +157,8 @@ services:
     image: ghcr.io/speaches-ai/speaches:${WHISPER_IMAGE_TAG:-0.8.3-cpu}
     container_name: faster-whisper
     restart: unless-stopped
+    group_add:
+      - '101'   # группа telegram-bot-api: чтение файлов Bot API (папки 750)
     mem_limit: ${WHISPER_MEM_LIMIT:-3g}
     environment:
       WHISPER_MODEL: ${WHISPER_MODEL:-Systran/faster-whisper-small}
@@ -171,3 +173,5 @@ services:
     volumes:
     - whisper-models:/home/ubuntu/.cache/huggingface/hub
     - /opt/n8n-install/data:/data:ro
+    # файлы локального Telegram Bot API: whisper читает голосовые/видео прямо по file_path из getFile
+    - telegram-bot-data:/var/lib/telegram-bot-api:ro
