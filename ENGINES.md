@@ -116,6 +116,8 @@ docker exec -it n8n-media-render node /opt/engines/html-render/render.mjs --help
 - HTTP Request: `POST http://faster-whisper:8000/v1/audio/transcriptions`, multipart: `file` (binary), `model`, `language`, `response_format=verbose_json`, `timestamp_granularities[]=word`.
 - Нода OpenAI → Audio → Transcribe: Base URL `http://faster-whisper:8000/v1`, ключ любой.
 
+**Замер (25.09.2026, сервер 4 CPU / 6 ГБ, ролик 56 с, русский).** `small`: 28–34 с, ошибается в редких словах («бронзированные» вместо «брендированные»). `large-v3-turbo`: 44 с (холодный старт 53 с, загрузка модели 8,6 с), текст и пунктуация точнее. На сервере владельца стоит turbo; в шаблоне для клиентов — `small` (безопасно на слабых серверах), turbo включать при ≥ 4 CPU / 6 ГБ.
+
 **Ресурсы.** Пока модель загружена: small ≈ 0.5–1 ГБ, medium ≈ 1.5 ГБ, large-v3-turbo ≈ 2 ГБ RAM. Не запускать параллельно с рендером Remotion на сервере с 6 ГБ.
 
 **Проверка.** `bash install-extras.sh --check` (health, модель, сквозной тест edge-tts → whisper), `moy-n8n: npm run doctor`.
