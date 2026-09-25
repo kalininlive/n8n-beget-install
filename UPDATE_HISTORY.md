@@ -10,3 +10,4 @@
 [2026-09-25] Updated from 2.40.5 to 2.41.2 (pre-release по GitHub, по решению владельца); дамп БД backups/db_n8n_pre_2.41.2_20260925_142640.sql.gz
 [2026-09-25] faster-whisper (speaches 0.8.3-cpu, контейнер faster-whisper, шим whisper, WHISPER_* в .env); шим ffprobe забран в репо
 [2026-09-25] telegram-bot-api-proxy (nginx: файлы local-режима по HTTP); @genesis_content_bot переведён на локальный Bot API (logOut облака, креды VuynFjARrXpGjLon + ogiJfZHCx5LEOPIe → http://telegram-bot-api-proxy)
+[2026-09-25] Ежечасная уборка временных файлов (scripts/cleanup_data.sh + cron); @dl_filemontage_wsbot переведён на локальный Bot API

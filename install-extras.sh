@@ -74,6 +74,11 @@ prepare_files() {
   mkdir -p data/reels data/carousel/jobs data/files \
     data/studio-engine/public/fonts data/studio-engine/public/assets/characters data/studio-engine/public/assets/stickers
   chmod +x shims/* 2>/dev/null || true
+  mkdir -p data/tg-send logs
+  # ежечасная уборка временных файлов (боты, отправка, рендеры, задачи GENESIS) — см. scripts/cleanup_data.sh
+  chmod +x scripts/cleanup_data.sh 2>/dev/null || true
+  echo "17 * * * * root /bin/bash $BASE_DIR/scripts/cleanup_data.sh >> $BASE_DIR/logs/cleanup.log 2>&1" > /etc/cron.d/n8n-data-cleanup
+  chmod 644 /etc/cron.d/n8n-data-cleanup
   [ -f searxng-settings.yml ] || printf 'use_default_settings: true\nsearch:\n  formats:\n    - html\n    - json\n' > searxng-settings.yml
   # шрифты html-render → общая папка шрифтов с маскотом (источник правды — engines/html-render/fonts в репо)
   if [ -d engines/html-render/fonts ]; then
@@ -140,6 +145,7 @@ check_all() {
   chk "whisper модель"      sh -c 'm=$(grep "^WHISPER_MODEL=" .env | cut -d= -f2-); docker exec faster-whisper curl -sf "http://localhost:8000/v1/models/$m" >/dev/null && echo "$m скачана"'
   chk "шимы внутри n8n-app" docker exec n8n-app sh -c 'ls /opt/shims/render-html /opt/shims/remotion /opt/shims/edge-tts /opt/shims/whisper'
   chk "NO_PROXY в n8n-app"  docker exec n8n-app sh -c 'echo "$NO_PROXY" | grep -q faster-whisper && echo "$NO_PROXY" | grep -q telegram-bot-api && echo "$NO_PROXY" | grep -q edge-tts && echo "$NO_PROXY" | grep -q searxng && echo "$NO_PROXY" | grep -q sandbox-api && echo "$NO_PROXY"'
+  chk "уборка (cron)"       sh -c 'test -f /etc/cron.d/n8n-data-cleanup && bash scripts/cleanup_data.sh | tail -n 1'
   chk "шрифты каруселей"    sh -c 'test -f data/studio-engine/public/fonts/fonts.css && ls data/studio-engine/public/fonts/*.woff2 | wc -l'
   if [ -f data/studio-engine/src/index.ts ]; then
     chk "studio-engine (маскот)" sh -c 'test -d data/studio-engine/node_modules && echo "src + node_modules на месте"'

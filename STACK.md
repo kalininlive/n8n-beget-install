@@ -96,3 +96,8 @@
 **Лимиты локального Bot API (проверено 25.09.2026):** скачивание — до 2 ГБ; отправка **по ссылке** (`video: "https://…"`) — **только до 20 МБ**, как в облаке; отправка **файла с диска** — до 2 ГБ: `file:///data/…` (контейнер `telegram-bot-api` монтирует `/data:ro`). Шаблон для воркфлоу: сначала по ссылке, при ошибке — скачать в `/data/tg-send/` (чистится через 3 ч) и отправить `file://` (так сделано в генераторах GENESIS и 7 POSTING).
 
 **Превью при отправке файлом.** Видео, отправленное файлом (`file://` или загрузкой из n8n), локальный Bot API показывает чёрным квадратом 320×320 без длительности. Нужно передать `thumb` (JPEG ≤ 320 px, строкой `file:///data/…jpg`), `width`, `height`, `duration` — в Telegram-ноде n8n это Additional Fields → Thumbnail / Width / Height / Duration. Превью и размеры снимать ffmpeg/ffprobe (шимы), учитывая поворот `rotation` у видео с телефона.
+
+## 7. Уборка временных файлов
+
+`scripts/cleanup_data.sh` — cron каждый час (`/etc/cron.d/n8n-data-cleanup`, ставит `install-extras.sh`), лог `logs/cleanup.log`.
+Файлы ботов в локальном Bot API — 24 ч (`CLEANUP_TG_HOURS`); `/data/tg-send` — 3 ч (`CLEANUP_TMP_MIN`); `/data/reels`, `/data/carousel/jobs` — 24 ч; папки задач `/data/genesis` — 3 дня (`CLEANUP_GENESIS_DAYS`). Правило для новых воркфлоу: временные файлы класть только в эти папки — тогда они уберутся, даже если выполнение упало.
