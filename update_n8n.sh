@@ -93,14 +93,14 @@ docker compose restart n8n n8n-worker
 # === Шаг 4. Проверка статуса ===
 echo "🩺 Шаг 4: проверка статуса контейнера..."
 sleep 5
-docker ps | grep -E 'n8n-app|n8n-worker|n8n-bot|n8n-postgres|n8n-redis|n8n-traefik|n8n-media-render|n8n-tools|edge-tts' || true
+docker ps | grep -E 'n8n-app|n8n-worker|n8n-bot|n8n-postgres|n8n-redis|n8n-traefik|n8n-media-render|n8n-tools|edge-tts|telegram-bot-api|faster-whisper' || true
 
 # === Шаг 5. Проверка обновлённой версии ===
 echo "🔎 Шаг 5: проверка обновлённой версии..."
 NEW_VERSION=$(docker exec n8n-app n8n --version || echo "unknown")
 echo "🆗 Новая версия: $NEW_VERSION"
 
-# === Шаг 5.1. Post-check движков (media-render, tools, edge-tts) ===
+# === Шаг 5.1. Post-check движков (media-render, tools, edge-tts, telegram-bot-api, faster-whisper) ===
 # Обновление пересобирает только n8n/n8n-worker; движки живут в override + /data и не должны
 # пострадать. Проверяем это явно, чтобы узнать о поломке из Telegram, а не из упавшего воркфлоу.
 echo "🧪 Шаг 5.1: проверяю движки после обновления..."
@@ -126,10 +126,12 @@ check_engine "remotion (маскот)"       "$BASE_DIR/shims/remotion"    "dock
 check_engine "render-html (карусели)"  "$BASE_DIR/shims/render-html" "docker exec -i n8n-media-render node /opt/engines/html-render/render.mjs --help" "--help"
 check_engine "ffmpeg (n8n-tools)"      "$BASE_DIR/shims/ffmpeg"      "docker exec -i n8n-tools ffmpeg -version" "-version"
 check_engine "edge-tts"                ""                            "docker exec -i n8n-app wget -qO- http://edge-tts:5050/v1/models"
+check_engine "telegram-bot-api"        ""                            "docker exec -i n8n-app wget -S -O- http://telegram-bot-api:8081 2>&1 | grep -q 'HTTP/1.1 404' && echo 'HTTP 404 OK'"
+check_engine "faster-whisper"          ""                            "docker exec -i n8n-app wget -qO- http://faster-whisper:8000/health"
 check_engine "shims в n8n-app"         ""                            "docker exec -i n8n-app sh -c 'test -x /opt/shims/remotion && test -x /opt/shims/render-html && echo ok'"
 if [ -n "$ENGINE_FAILS" ]; then
   notify "⚠️ *n8n обновлён, но движки не отвечают:*${ENGINE_FAILS}
-Проверь: \`docker ps\`, \`docker compose up -d n8n-media-render n8n-tools edge-tts\`"
+Проверь: \`docker ps\`, \`docker compose up -d n8n-media-render n8n-tools edge-tts telegram-bot-api faster-whisper\`"
 else
   echo "  🟢 Все движки отвечают."
 fi

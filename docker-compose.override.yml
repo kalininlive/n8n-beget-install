@@ -1,9 +1,34 @@
 volumes:
   sandbox-tls: null
+  telegram-bot-data:
+    driver: local
+  whisper-models:
+    driver: local
 services:
   n8n-traefik:
     extra_hosts:
     - host.docker.internal:host-gateway
+  n8n:
+    volumes:
+      - telegram-bot-data:/data/telegram-files
+      - telegram-bot-data:/var/lib/telegram-bot-api:ro
+  n8n-worker:
+    volumes:
+      - telegram-bot-data:/data/telegram-files
+      - telegram-bot-data:/var/lib/telegram-bot-api:ro
+  telegram-bot-api:
+    image: aiogram/telegram-bot-api:latest
+    container_name: telegram-bot-api
+    restart: unless-stopped
+    environment:
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
+      TELEGRAM_LOCAL: "true"
+      TELEGRAM_STAT: "true"
+    volumes:
+      - telegram-bot-data:/var/lib/telegram-bot-api
+    ports:
+      - "127.0.0.1:8081:8081"
   n8n-media-render:
     build:
       context: .
@@ -116,3 +141,23 @@ services:
     - /opt/n8n-install/data:/data
     - /opt/n8n-install/edge-tts-custom/server.py:/app/server.py:ro
     - /opt/n8n-install/edge-tts-custom/tts_handler.py:/app/tts_handler.py:ro
+  faster-whisper:
+    # Распознавание речи (faster-whisper) с OpenAI-совместимым API: POST /v1/audio/transcriptions.
+    # Для n8n: http://faster-whisper:8000 или шим `whisper <файл в /data>`. Модель качается в том whisper-models.
+    image: ghcr.io/speaches-ai/speaches:${WHISPER_IMAGE_TAG:-0.8.3-cpu}
+    container_name: faster-whisper
+    restart: unless-stopped
+    mem_limit: ${WHISPER_MEM_LIMIT:-3g}
+    environment:
+      WHISPER_MODEL: ${WHISPER_MODEL:-Systran/faster-whisper-small}
+      WHISPER__COMPUTE_TYPE: int8
+      WHISPER__CPU_THREADS: ${WHISPER_CPU_THREADS:-4}
+      WHISPER__TTL: ${WHISPER_TTL:-600}
+      ENABLE_UI: 'false'
+      LOG_LEVEL: info
+      HTTP_PROXY: ${PROXY_URL}
+      HTTPS_PROXY: ${PROXY_URL}
+      NO_PROXY: ${NO_PROXY}
+    volumes:
+    - whisper-models:/home/ubuntu/.cache/huggingface/hub
+    - /opt/n8n-install/data:/data:ro

@@ -5,7 +5,7 @@
 * ✅ `n8n` (queue mode: `n8n-app` + `n8n-worker`), `Postgres 15`, `Redis 7`, `Traefik` (SSL Let's Encrypt)
 * ✅ Кастомный образ n8n (`Dockerfile.n8n`) + `n8n-tools` (ffmpeg, yt-dlp, python3) через шимы
 * ✅ **Движки рендера** в `n8n-media-render`: маскот-видео на Remotion и **html-render** (HTML → PNG карусели) — см. [ENGINES.md](ENGINES.md)
-* ✅ `edge-tts` (бесплатная озвучка + пословные таймкоды), `SearXNG` (web search для AI Assistant), `n8n Sandbox` (code sandbox для AI Assistant)
+* ✅ `edge-tts` (бесплатная озвучка + пословные таймкоды), `SearXNG` (web search для AI Assistant), `n8n Sandbox` (code sandbox для AI Assistant), **локальный `telegram-bot-api`** (файлы до 2 ГБ)
 * ✅ Telegram-бот: `/status`, `/logs`, `/backups`, `/update`; автобэкап в 02:00; post-check движков после обновления
 
 Состав и правила сборки — [STACK.md](STACK.md). История обновлений — [UPDATE_HISTORY.md](UPDATE_HISTORY.md).

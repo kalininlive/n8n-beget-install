@@ -49,11 +49,14 @@ prepare_env() {
   ensure_env_var N8N_INSTANCE_AI_SEARXNG_URL "http://searxng:8080"
   grep -q '^PIXABAY_API_KEY=' .env || echo "PIXABAY_API_KEY=" >> .env
   grep -q '^PROXY_URL=' .env || echo "PROXY_URL=" >> .env
+  grep -q '^TELEGRAM_API_ID=' .env || echo "TELEGRAM_API_ID=" >> .env
+  grep -q '^TELEGRAM_API_HASH=' .env || echo "TELEGRAM_API_HASH=" >> .env
+  ensure_env_var WHISPER_MODEL "Systran/faster-whisper-small"
 
   # NO_PROXY: каждый внутренний сервис — в начало списка (иначе 502 через внешний прокси)
   local current changed=0 host
   grep -q '^NO_PROXY=' .env || echo "NO_PROXY=localhost,127.0.0.1,::1" >> .env
-  for host in n8n-tools n8n-media-render searxng sandbox-runner-1 sandbox-api edge-tts; do
+  for host in faster-whisper telegram-bot-api n8n-tools n8n-media-render searxng sandbox-runner-1 sandbox-api edge-tts; do
     current=$(grep '^NO_PROXY=' .env | cut -d= -f2-)
     if ! echo ",$current," | grep -q ",$host,"; then
       sed -i "s|^NO_PROXY=|NO_PROXY=${host},|" .env
@@ -84,7 +87,8 @@ start_services() {
   log "3/4 запуск сервисов из docker-compose.override.yml"
   docker compose up -d sandbox-certs
   docker wait sandbox-certs >/dev/null 2>&1 || true
-  docker compose up -d sandbox-api sandbox-runner-1 searxng edge-tts n8n-tools
+  docker compose up -d sandbox-api sandbox-runner-1 searxng edge-tts telegram-bot-api faster-whisper n8n-tools
+  whisper_model
   if ! docker image inspect n8n-install-n8n-media-render:latest >/dev/null 2>&1; then
     log "  сборка образа n8n-media-render (5-10 минут)..."
     docker compose build n8n-media-render
@@ -95,6 +99,18 @@ start_services() {
     docker compose up -d n8n n8n-worker
   fi
   sleep 8
+}
+
+# faster-whisper: скачать модель из .env в том whisper-models (идемпотентно, при повторе — мгновенно)
+whisper_model() {
+  local model i
+  model=$(grep '^WHISPER_MODEL=' .env | cut -d= -f2-)
+  for i in $(seq 1 30); do
+    docker exec faster-whisper curl -sf http://localhost:8000/health >/dev/null 2>&1 && break
+    sleep 2
+  done
+  log "  faster-whisper: модель ${model} (первый раз — скачивание, до нескольких минут)"
+  docker exec faster-whisper curl -sf -X POST "http://localhost:8000/v1/models/${model}" >/dev/null     || log "  ⚠️ не удалось скачать ${model} — проверьте доступ к huggingface.co / PROXY_URL"
 }
 
 # ---------- 4. Проверка ----------
@@ -109,7 +125,7 @@ check_all() {
       echo "  ❌ $name: $(printf '%s' "$out" | tail -n 2)"; fails=$((fails+1))
     fi
   }
-  chk "контейнеры"          sh -c 'for c in n8n-app n8n-worker n8n-postgres n8n-redis n8n-traefik n8n-tools n8n-media-render edge-tts searxng sandbox-api sandbox-runner-1; do docker inspect -f "{{.State.Running}}" "$c" 2>/dev/null | grep -q true || { echo "не запущен: $c"; exit 1; }; done; echo "все 11 запущены"'
+  chk "контейнеры"          sh -c 'for c in n8n-app n8n-worker n8n-postgres n8n-redis n8n-traefik n8n-tools n8n-media-render edge-tts searxng sandbox-api sandbox-runner-1 telegram-bot-api faster-whisper; do docker inspect -f "{{.State.Running}}" "$c" 2>/dev/null | grep -q true || { echo "не запущен: $c"; exit 1; }; done; echo "все запущены"'
   chk "n8n healthz"         docker exec n8n-app wget -qO- http://localhost:5678/healthz
   chk "remotion (шим)"      sh -c "./shims/remotion --help | head -n 1"
   chk "render-html (шим)"   ./shims/render-html --version
@@ -117,8 +133,12 @@ check_all() {
   chk "edge-tts из n8n"     docker exec n8n-app wget -qO- http://edge-tts:5050/v1/models
   chk "searxng из n8n"      docker exec n8n-app wget -qO- 'http://searxng:8080/search?q=n8n&format=json'
   chk "sandbox из n8n"      docker exec n8n-app wget -qO- http://sandbox-api:8080/healthz
-  chk "шимы внутри n8n-app" docker exec n8n-app sh -c 'ls /opt/shims/render-html /opt/shims/remotion /opt/shims/edge-tts'
-  chk "NO_PROXY в n8n-app"  docker exec n8n-app sh -c 'echo "$NO_PROXY" | grep -q edge-tts && echo "$NO_PROXY" | grep -q searxng && echo "$NO_PROXY" | grep -q sandbox-api && echo "$NO_PROXY"'
+  chk "telegram-bot-api"    sh -c 'docker exec n8n-app wget -S -O- http://telegram-bot-api:8081 2>&1 | grep -q "HTTP/1.1 404" && echo "HTTP 404 OK"'
+  chk "telegram тома n8n"   docker exec n8n-app sh -c 'test -d /data/telegram-files && test -d /var/lib/telegram-bot-api && echo "смонтированы"'
+  chk "faster-whisper из n8n" docker exec n8n-app wget -qO- http://faster-whisper:8000/health
+  chk "whisper модель"      sh -c 'm=$(grep "^WHISPER_MODEL=" .env | cut -d= -f2-); docker exec faster-whisper curl -sf "http://localhost:8000/v1/models/$m" >/dev/null && echo "$m скачана"'
+  chk "шимы внутри n8n-app" docker exec n8n-app sh -c 'ls /opt/shims/render-html /opt/shims/remotion /opt/shims/edge-tts /opt/shims/whisper'
+  chk "NO_PROXY в n8n-app"  docker exec n8n-app sh -c 'echo "$NO_PROXY" | grep -q faster-whisper && echo "$NO_PROXY" | grep -q telegram-bot-api && echo "$NO_PROXY" | grep -q edge-tts && echo "$NO_PROXY" | grep -q searxng && echo "$NO_PROXY" | grep -q sandbox-api && echo "$NO_PROXY"'
   chk "шрифты каруселей"    sh -c 'test -f data/studio-engine/public/fonts/fonts.css && ls data/studio-engine/public/fonts/*.woff2 | wc -l'
   if [ -f data/studio-engine/src/index.ts ]; then
     chk "studio-engine (маскот)" sh -c 'test -d data/studio-engine/node_modules && echo "src + node_modules на месте"'
@@ -136,6 +156,10 @@ check_all() {
 HTML
   chk "тестовый рендер PNG"  sh -c "./shims/render-html /data/carousel/jobs/_selftest --quiet >/dev/null && test -s $job/slide_01.png && ls -la $job/slide_01.png"
   rm -rf "$job"
+  # реальное распознавание: edge-tts озвучивает фразу → whisper её распознаёт
+  mkdir -p data/files
+  chk "тест edge-tts → whisper" sh -c './shims/edge-tts --voice ru-RU-DmitryNeural --text "Проверка распознавания речи" --write-media /data/files/_whisper_selftest.mp3 >/dev/null 2>&1 && ./shims/whisper /data/files/_whisper_selftest.mp3 ru | grep -o "\"text\":\"[^\"]*\"" | head -n 1'
+  rm -f data/files/_whisper_selftest.mp3
   if [ "$fails" -eq 0 ]; then
     echo "🟢 Всё зелёное."
   else

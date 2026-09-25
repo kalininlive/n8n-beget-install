@@ -101,7 +101,28 @@ docker exec -it n8n-media-render node /opt/engines/html-render/render.mjs --help
 
 ---
 
-## 3. Проверка обоих движков одной командой
+## 3. Распознавание речи — faster-whisper
+
+**Что это.** Контейнер `faster-whisper` (образ `ghcr.io/speaches-ai/speaches:0.8.3-cpu`, open-source, MIT) — сервер над библиотекой [faster-whisper](https://github.com/SYSTRAN/faster-whisper). Модели Whisper открытые, скачиваются один раз с HuggingFace в том `whisper-models`, дальше всё считается на CPU сервера: без ключей, без оплаты, файлы наружу не уходят. «OpenAI-совместимый» — только формат запроса.
+
+**Настройки (`.env`).** `WHISPER_MODEL` (по умолчанию `Systran/faster-whisper-small`; точнее — `Systran/faster-whisper-medium`, `deepdml/faster-whisper-large-v3-turbo-ct2`), `WHISPER_CPU_THREADS=4`, `WHISPER_TTL=600` (секунд до выгрузки модели из RAM), `WHISPER_MEM_LIMIT=3g`. Смена модели: правка `.env` → `docker compose up -d faster-whisper && bash install-extras.sh` (скачает модель).
+
+**Как вызывать из n8n.**
+- Шим (Execute Command), файл должен лежать в `/data`:
+  ```
+  whisper /data/genesis/<job>/video.mp4 ru          # язык необязателен (автоопределение)
+  ```
+  stdout — JSON `verbose_json`: `text`, `language`, `duration`, `segments[]`, `words[{word,start,end}]`.
+- HTTP Request: `POST http://faster-whisper:8000/v1/audio/transcriptions`, multipart: `file` (binary), `model`, `language`, `response_format=verbose_json`, `timestamp_granularities[]=word`.
+- Нода OpenAI → Audio → Transcribe: Base URL `http://faster-whisper:8000/v1`, ключ любой.
+
+**Ресурсы.** Пока модель загружена: small ≈ 0.5–1 ГБ, medium ≈ 1.5 ГБ, large-v3-turbo ≈ 2 ГБ RAM. Не запускать параллельно с рендером Remotion на сервере с 6 ГБ.
+
+**Проверка.** `bash install-extras.sh --check` (health, модель, сквозной тест edge-tts → whisper), `moy-n8n: npm run doctor`.
+
+---
+
+## 4. Проверка всех движков одной командой
 
 - На сервере: `bash /opt/n8n-install/install-extras.sh --check`
 - С ПК: `cd moy-n8n && npm run doctor` (контейнеры, шимы, `NO_PROXY`, тестовый рендер PNG, smoke-рендер Remotion)
