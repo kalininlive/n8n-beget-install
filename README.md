@@ -5,7 +5,8 @@
 * ✅ `n8n` (queue mode: `n8n-app` + `n8n-worker`), `Postgres 15`, `Redis 7`, `Traefik` (SSL Let's Encrypt)
 * ✅ Кастомный образ n8n (`Dockerfile.n8n`) + `n8n-tools` (ffmpeg, yt-dlp, python3) через шимы
 * ✅ **Движки рендера** в `n8n-media-render`: маскот-видео на Remotion и **html-render** (HTML → PNG карусели) — см. [ENGINES.md](ENGINES.md)
-* ✅ `edge-tts` (бесплатная озвучка + пословные таймкоды), `SearXNG` (web search для AI Assistant), `n8n Sandbox` (code sandbox для AI Assistant), **локальный `telegram-bot-api`** (файлы до 2 ГБ)
+* ✅ `edge-tts` (бесплатная озвучка + пословные таймкоды), `SearXNG` (web search для AI Assistant), `n8n Sandbox` (code sandbox для AI Assistant), **локальный `telegram-bot-api`** + `telegram-bot-api-proxy` (файлы до 2 ГБ; Base URL кредов Telegram — `http://telegram-bot-api-proxy`), **`faster-whisper`** (бесплатное локальное распознавание речи, шим `whisper`)
+* ✅ Ежечасная уборка временных файлов (`scripts/cleanup_data.sh`, cron) — см. `STACK.md` §7
 * ✅ Telegram-бот: `/status`, `/logs`, `/backups`, `/update`; автобэкап в 02:00; post-check движков после обновления
 
 Состав и правила сборки — [STACK.md](STACK.md). История обновлений — [UPDATE_HISTORY.md](UPDATE_HISTORY.md).
@@ -43,7 +44,7 @@ bash install-extras.sh --check                         # только прове
 
 ## 🚀 Обновление n8n
 
-Через Telegram `/update` или на сервере `bash update_n8n.sh` (из бота). Скрипт: бэкап → `FROM n8nio/n8n:<latest>` в `Dockerfile.n8n` → `docker compose build n8n n8n-worker && up -d n8n n8n-worker` → обновление community-нод → **post-check движков** (`remotion`, `render-html`, `ffmpeg`, `edge-tts`) с алертом в Telegram → лёгкая уборка (`image prune -f`, без `-a`).
+Через Telegram `/update` или на сервере `bash update_n8n.sh` (из бота). Скрипт: бэкап → `FROM n8nio/n8n:<latest>` в `Dockerfile.n8n` → `docker compose build n8n n8n-worker && up -d n8n n8n-worker` → обновление community-нод → **post-check движков** (`remotion`, `render-html`, `ffmpeg`, `edge-tts`, `telegram-bot-api-proxy`, `faster-whisper`) с алертом в Telegram → лёгкая уборка (`image prune -f`, без `-a`).
 
 Ручное обновление:
 
@@ -76,7 +77,7 @@ docker compose build n8n-media-render && docker compose up -d n8n-media-render
 ├── docker-compose.override.yml        # движки и доп. сервисы
 ├── Dockerfile.n8n / .render / .tools  # образы
 ├── engines/html-render/               # движок HTML → PNG (+ шрифты каруселей)
-├── shims/                             # remotion, render-html, ffmpeg, yt-dlp, python, edge-tts, …
+├── shims/                             # remotion, render-html, ffmpeg, ffprobe, yt-dlp, python, edge-tts, whisper, …
 ├── edge-tts-custom/, searxng-settings.yml
 ├── bot/                               # Telegram-бот
 ├── update_n8n.sh, backup_n8n.sh
