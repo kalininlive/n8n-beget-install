@@ -688,6 +688,28 @@ tl.seek(0);
   return { inputs, hfJobs: hfJobs.map(j => j.id), stats: { assEvents: G.count(), maskEvents } };
 }
 
+// Обложка: первый кадр спикера + хук по центру (капс Inter Display Black, строки белые с тенью, последняя — в плашке бренда,
+// как акцент кинетических титров эталона). Пишет ASS-файл; кадр и наложение делает cli (ffmpeg).
+export function coverAss(hook, skin, file) {
+  const G = makeAss(W, H), f = FONTS.disp900, lsK = -0.02;
+  const text = String(hook).toUpperCase().trim();
+  let size = 150, lines = wrap(f, size, text, 900, lsK * size);
+  if (lines.length > 3) { size = 118; lines = wrap(f, size, text, 900, lsK * size); }
+  size = fitSize(f, size, lines, 900, lsK);
+  const ls = lsK * size, lh = size * 0.98, padX = 34, padY = 10, shadow = { dx: 0, dy: 8, blur: 14, op: 0.6 };
+  const blockH = lines.length * lh + (lines.length > 1 ? 2 * padY : 0);
+  let y = H / 2 - blockH / 2 - 40;
+  const parts = [];
+  lines.forEach((ln, i) => {
+    const tw = textW(f, size, ln, ls), x = W / 2 - tw / 2, pill = i === lines.length - 1 && lines.length > 1;
+    if (pill) { y += padY; parts.push({ kind: 'draw', x: x - padX, y: y - padY + 4, path: rrect(f2(tw + 2 * padX), f2(lh + 2 * padY - 8), 26), color: skin.brand, shadow: { dx: 0, dy: 16, blur: 18, op: 0.35 } }); }
+    parts.push(textPart({ font: f, size, text: ln, x, lineTop: y, lineH: lh, color: skin.white, ls, shadow: pill ? null : shadow }));
+    y += lh;
+  });
+  G.element({ t0: 0, t1: 1, parts, layer: 1 });
+  G.write(file);
+}
+
 // фон бренда (радиальный градиент как у слайда HyperFrames) — один PNG на скин
 export function bgGeq(skin) {
   const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));

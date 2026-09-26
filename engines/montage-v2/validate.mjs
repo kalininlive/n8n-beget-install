@@ -95,6 +95,7 @@ export function validate(input, words, { duration, render = false } = {}) {
     if (last && Math.abs(s.t1 - DUR) > 0.3) err(i, `последняя сцена кончается в ${s.t1}, а ролик длится ${DUR} с`);
     if (last) s.t1 = DUR;
   });
+  if (plan.hook != null && (typeof plan.hook !== 'string' || plan.hook.length > RULES.hookTextMax)) errors.push(`hook — строка до ${RULES.hookTextMax} символов (хук для обложки)`);
   if (errors.length) return { ok: false, errors, warnings, plan };
 
   // 2. правила режиссуры (§3)

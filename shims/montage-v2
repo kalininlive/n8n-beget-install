@@ -1,0 +1,5 @@
+#!/bin/sh
+# MONTAGE v2: montage-v2 catalog [--md] | validate <plan> <words> | render <jobDir> [--out f.mp4] [--cover f.jpg] [--skin "#RRGGBB"]
+# Пока движок не запечён в образ — запускается из тома /data/files/montage-v2 (выкатка: moy-n8n npm run deploy:montage-v2)
+exec docker exec -i -e HYPERFRAMES_BROWSER_PATH=/data/files/montage-v2-pilot/chrome-headless-shell/chrome-headless-shell-linux64/chrome-headless-shell \
+  -e HYPERFRAMES_NO_UPDATE_CHECK=1 n8n-media-render node /data/files/montage-v2/engine/montage-v2/cli.mjs "$@"

@@ -39,7 +39,7 @@ export const RULES = {
   heavyShare: 0.5,                      // slide_full + card_over_blur ≤ 50% времени
   heavy: ['slide_full', 'card_over_blur'],
   headLineMax: 18,                      // капс-заголовок: символов в строке
-  kickerMax: 28, badgeMax: 12, keywordMax: 10, cardItemMax: 18, checkItemMax: 34, ctaTextMax: 40,
+  kickerMax: 28, hookTextMax: 34, badgeMax: 12, keywordMax: 10, cardItemMax: 18, checkItemMax: 34, ctaTextMax: 40,
   snap: 0.35,                           // *_at притягивается к началу слова ближе этого, с
 };
 
@@ -68,11 +68,12 @@ export function agentSpec() {
       'смена компонента каждые 2–5 с, длительность в пределах компонента; два одинаковых компонента подряд нельзя',
       `slide_full + card_over_blur ≤ ${RULES.heavyShare * 100}% времени`,
       `тексты только из слов речи (сокращать можно, придумывать нельзя); head ≤ ${RULES.headLineMax} символов в строке, kicker ≤ ${RULES.kickerMax}, badge ≤ ${RULES.badgeMax}, keyword ≤ ${RULES.keywordMax}, пункт чек-листа ≤ ${RULES.checkItemMax}, cta.text ≤ ${RULES.ctaTextMax}`,
+      `hook — хук для обложки: 2–5 самых цепляющих слов из речи (результат, цифра, боль), ≤ ${RULES.hookTextMax} символов`,
       '*_at (моменты появления) можно не писать — код поставит по словам; если текст пересказан, укажи время начала нужного слова из списка слов',
     ],
     skin: 'поле "skin": цвет бренда "#RRGGBB" (остальная палитра считается сама) или имя готового скина; если бренд-кит клиента задаёт цвет жёстко — его подставит воркфлоу',
     plan_example: {
-      style: 'reference', format: 'expert', skin: '#1E6BFF',
+      style: 'reference', format: 'expert', skin: '#1E6BFF', hook: 'Бот за 3 секунды: лиды +68%',
       scenes: [
         { t0: 0, t1: 2.1, c: 'talking' },
         { t0: 2.1, t1: 5.9, c: 'slide_full', kicker: 'клиент ждёт ответа', head: '40 минут', object: { c: 'cards_trio', items: [['chat', 'клиент написал'], ['clock', 'менеджер занят'], ['x', 'клиент ушёл']] } },

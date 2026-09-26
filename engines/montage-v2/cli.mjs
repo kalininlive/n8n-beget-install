@@ -3,7 +3,8 @@
 //
 //   montage-v2 validate <plan.json> <words.json> [--duration 31.2]
 //       проверка плана агента: stdout {ok, errors[], warnings[], plan} (plan — с посчитанными *_at). Код 1, если errors.
-//   montage-v2 render <jobDir> [--out <file.mp4>] [--workers 2] [--preset veryfast] [--keep]
+//   montage-v2 render <jobDir> [--out <file.mp4>] [--cover <file.jpg>] [--workers 2] [--preset veryfast] [--keep]
+//       --cover: обложка — первый кадр спикера + plan.hook по центру (нет hook — первые слова речи)
 //       jobDir: plan.json, words.json, speaker.mp4 (+ файлы b-roll из scenes[].src: путь от jobDir или абсолютный /data/...).
 //       stdout {ok, out, duration, ms:{validate,build,hyperframes,ffmpeg,total}, warnings, plan}; прогресс — в stderr.
 //   montage-v2 catalog [--md]
@@ -17,7 +18,7 @@ import path from 'path';
 import { execFileSync, spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { validate } from './validate.mjs';
-import { build, bgGeq } from './render.mjs';
+import { build, bgGeq, coverAss } from './render.mjs';
 import { agentSpec } from './catalog.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -98,10 +99,12 @@ async function main() {
     const words = loadWords(readJson(path.join(job, 'words.json')));
     const speaker = path.join(job, planIn.speaker || 'speaker.mp4');
     if (!fs.existsSync(speaker)) fail(`нет видео спикера: ${speaker}`);
-    for (const s of planIn.scenes || []) if (s.src) { s.src = path.isAbsolute(s.src) ? s.src : path.join(job, s.src); if (!fs.existsSync(s.src)) fail(`нет файла b-roll: ${s.src}`); }
+    const pre = []; // b-roll не скачался -> сцена станет речью спикера, монтаж не падает
+    for (const s of planIn.scenes || []) if (s.src) { s.src = path.isAbsolute(s.src) ? s.src : path.join(job, s.src); if (!fs.existsSync(s.src) || !fs.statSync(s.src).size) { pre.push(`нет файла b-roll ${s.src} — сцена будет речью спикера`); delete s.src; } }
     const duration = planIn.duration || Math.floor(probeDur(speaker) * 30) / 30;
     const v = validate(planIn, words, { duration, render: true });
     if (!v.ok) { out({ ok: false, error: 'план не прошёл проверку', errors: v.errors, warnings: v.warnings }); process.exit(1); }
+    v.warnings.unshift(...pre);
     // broll_own без ролика -> речь спикера; соседние talking склеиваются (переход «сам в себя» не нужен)
     const sc = [];
     for (const s of v.plan.scenes) {
@@ -138,11 +141,20 @@ async function main() {
     const r = spawnSync('ffmpeg', args, { encoding: 'utf8', maxBuffer: 64 << 20 });
     if (r.status !== 0) fail('ffmpeg упал', { tail: (r.stderr || '').slice(-2000) });
     T.ffmpeg = now();
+    let cover = null;
+    if (opt('--cover')) {
+      cover = path.resolve(opt('--cover'));
+      const hook = (v.plan.hook || words.slice(0, 4).map(w => w.w).join(' ')).trim();
+      coverAss(hook, skin, path.join(wd, 'cover.ass'));
+      const rc = spawnSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-ss', '0.1', '-i', speaker, '-frames:v', '1',
+        '-vf', `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,ass=${path.join(wd, 'cover.ass')}`, '-q:v', '2', cover], { encoding: 'utf8' });
+      if (rc.status !== 0) { v.warnings.push('обложка не собрана: ' + (rc.stderr || '').slice(-300)); cover = null; }
+    }
     if (!flag('--keep')) for (const id of b.hfJobs) fs.rmSync(path.join(wd, 'slides', id, 'assets'), { recursive: true, force: true });
     const sec = (a, bb) => Math.round((T[bb] - T[a]) / 100) / 10;
     out({ ok: true, engine: 'montage-v2', version: VERSION, out: outFile, duration, scenes: v.plan.scenes.length, style: v.plan.style, format: v.plan.format, skin,
       ms: { validate: sec('start', 'validate'), build: sec('validate', 'build'), hyperframes: sec('build', 'hyperframes'), ffmpeg: sec('hyperframes', 'ffmpeg'), total: sec('start', 'ffmpeg') },
-      warnings: v.warnings, workDir: wd });
+      warnings: v.warnings, workDir: wd, cover, hook: v.plan.hook || null });
     return;
   }
   fail(`неизвестная команда "${cmd}" (catalog | validate | render | --version | --help)`);
