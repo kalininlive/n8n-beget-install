@@ -36,11 +36,20 @@ export function loadWords(raw) {
   const arr = Array.isArray(raw) ? raw : raw?.words || raw?.segments?.flatMap(s => s.words || []) || [];
   if (!arr.length) return [];
   const ms = arr.some(w => (w.end ?? w.e ?? 0) > 1000) && !('t' in arr[0]); // AssemblyAI — миллисекунды
-  return arr.map(w => ({
+  const parts = arr.map(w => ({
     t: +(w.t ?? w.start) / (ms ? 1000 : 1),
     e: +(w.e ?? w.end) / (ms ? 1000 : 1),
-    w: String(w.w ?? w.word ?? w.text ?? '').trim(),
-  })).filter(w => w.w && Number.isFinite(w.t)).map(w => ({ ...w, t: Math.round(w.t * 100) / 100, e: Math.round(w.e * 100) / 100 }));
+    r: String(w.w ?? w.word ?? w.text ?? ''),
+  })).filter(w => w.r.trim() && Number.isFinite(w.t));
+  // faster-whisper режет слово на части: « 26» + «-м», « АИ» + «-бота» — часть без ведущего пробела клеится к предыдущему слову
+  const out = [];
+  for (const w of parts) {
+    const prev = out[out.length - 1];
+    if (prev && !/^\s/.test(w.r) && /^\s/.test(parts[0].r)) { prev.w += w.r.trim(); prev.e = w.e; continue; }
+    out.push({ t: w.t, e: w.e, w: w.r.trim() });
+  }
+  // пунктуация по краям для титров не нужна («плохой,» -> «плохой»), знаки внутри числа и % остаются
+  return out.map(w => ({ w: w.w.replace(/^[«"'(]+|[.,!?:;»"')…]+$/g, ''), t: Math.round(w.t * 100) / 100, e: Math.round(w.e * 100) / 100 })).filter(w => w.w);
 }
 const readJson = f => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { fail(`не прочитан ${f}: ${e.message}`); } };
 const probeDur = f => +execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', f]).toString().trim();
@@ -55,7 +64,7 @@ function skinBg(skin) {
 
 async function main() {
   const cmd = argv[0];
-  if (!cmd || cmd === '--help' || cmd === '-h') { process.stdout.write(fs.readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 18).map(l => l.replace(/^\/\/ ?/, '')).join('\n') + '\n'); return; }
+  if (!cmd || cmd === '--help' || cmd === '-h') { process.stdout.write(fs.readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1).filter((l, i, a) => a.slice(0, i + 1).every(x => x.startsWith('//'))).map(l => l.replace(/^\/\/ ?/, '')).join('\n') + '\n'); return; }
   if (cmd === '--version') { out({ engine: 'montage-v2', version: VERSION }); return; }
 
   if (cmd === 'catalog') {

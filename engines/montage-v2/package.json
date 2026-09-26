@@ -1,6 +1,6 @@
 {
   "name": "montage-v2",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "MONTAGE v2 — гибридный монтаж: план из каталога компонентов → HyperFrames (сцены без спикера) + ffmpeg/libass",
   "type": "module",
   "private": true,

@@ -19,7 +19,7 @@ export const COMPONENTS = {
     use: 'результат/итог с цифрой: тёмный фон, спикер в прямоугольнике, сверху счётчик stat_big' },
   card_over_blur: { dur: [3, 8],     fields: {}, obj: ['checklist'],
     use: 'перечисление, шаги, возможности: спикер размыт, белая карточка с чек-листом, пункты появляются, когда произнесены' },
-  broll_own:      { dur: [2, 5],     fields: { query: 'text' }, obj: null,
+  broll_own:      { dur: [2, 5],     fields: { query: 'query' }, obj: null,
     use: 'показать процесс/предмет: ролик из базы клиента на весь кадр; query — что искать по смыслу (3–6 слов)' },
   cta:            { dur: [3, 8],     fields: { text: 'text', keyword: 'keyword' }, obj: null,
     use: 'финальный призыв, всегда последняя сцена до конца ролика: text — призыв, keyword — кодовое слово в плашке' },

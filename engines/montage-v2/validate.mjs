@@ -79,7 +79,7 @@ export function validate(input, words, { duration, render = false } = {}) {
       const opt = kind.endsWith('?'), v = s[f];
       if (v == null || v === '') { if (!opt && !(f === 'query' && s.src)) err(i, `${s.c}: нет поля "${f}"`); continue; }
       if (typeof v !== 'string') { err(i, `${s.c}.${f} должно быть строкой`); continue; }
-      const lim = { text: s.c === 'cta' ? RULES.ctaTextMax : RULES.kickerMax, badge: RULES.badgeMax, keyword: RULES.keywordMax }[kind.replace('?', '')];
+      const lim = { text: s.c === 'cta' ? RULES.ctaTextMax : RULES.kickerMax, badge: RULES.badgeMax, keyword: RULES.keywordMax, query: 60 }[kind.replace('?', '')];
       if (lim && v.length > lim) err(i, `${s.c}.${f} "${v}" длиннее ${lim} символов`);
       if (kind.startsWith('head') && v.split(/\s+/).some(wd => wd.length > RULES.headLineMax)) err(i, `${s.c}.${f}: слово длиннее ${RULES.headLineMax} символов`);
       if (kind.startsWith('head') && v.length > RULES.headLineMax * 2) err(i, `${s.c}.${f} "${v}" не влезет в 2 строки по ${RULES.headLineMax}`);
