@@ -89,7 +89,7 @@ export function validate(input, words, { duration, render = false } = {}) {
     if (C.obj && !o && !C.objOptional) err(i, `${s.c}: нужен object (${C.obj.join(' | ')})`);
     if (o) {
       if (!C.obj || !C.obj.includes(o.c)) err(i, `${s.c}: объект "${o.c}" не подходит (можно: ${(C.obj || ['—']).join(', ')})`);
-      else checkObject(i, s, o, err);
+      else checkObject(i, s, o, err, warn);
     }
     if (render && s.c === 'broll_own' && !s.src) warn(i, 'broll_own: своего ролика не нашлось (нет src) — сцена будет речью спикера');
     if (last && Math.abs(s.t1 - DUR) > 0.3) err(i, `последняя сцена кончается в ${s.t1}, а ролик длится ${DUR} с`);
@@ -118,15 +118,17 @@ export function validate(input, words, { duration, render = false } = {}) {
   return { ok: true, errors, warnings, plan };
 }
 
-function checkObject(i, s, o, err) {
+// Мелочи, которые не портят смысл, исправляются здесь же с предупреждением — монтаж не должен падать из-за них
+function checkObject(i, s, o, err, warn) {
   const lim = OBJECTS[o.c].items;
   if (o.c === 'cards_trio' || o.c === 'checklist') {
+    if (Array.isArray(o.items) && o.items.length > lim[1]) { warn(i, `${o.c}: пунктов ${o.items.length}, оставлены первые ${lim[1]}`); o.items = o.items.slice(0, lim[1]); }
     if (!Array.isArray(o.items) || o.items.length < lim[0] || o.items.length > lim[1]) return err(i, `${o.c}: пунктов должно быть ${lim[0]}–${lim[1]}`);
     o.items = o.items.map(x => (Array.isArray(x) ? x : o.c === 'checklist' ? [x] : x));
   }
   if (o.c === 'cards_trio') o.items.forEach((x, k) => {
     if (!Array.isArray(x) || typeof x[1] !== 'string') return err(i, `cards_trio.items[${k}] — ["иконка", "текст"]`);
-    if (!ICONS.includes(x[0])) err(i, `cards_trio: иконки "${x[0]}" нет (есть: ${ICONS.join(', ')})`);
+    if (!ICONS.includes(x[0])) { warn(i, `cards_trio: иконки "${x[0]}" нет — взята check`); x[0] = 'check'; }
     if (x[1].length > RULES.cardItemMax) err(i, `cards_trio: "${x[1]}" длиннее ${RULES.cardItemMax} символов`);
   });
   if (o.c === 'checklist') {

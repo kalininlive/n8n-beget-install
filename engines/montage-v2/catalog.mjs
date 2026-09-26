@@ -15,7 +15,7 @@ export const COMPONENTS = {
     use: 'главный тезис, проблема, цифра без лица: слайд цвета бренда. kicker — подводка, head — капс-тезис 1–3 слова; object cards_trio — 3 карточки (иконка + 2–3 слова)' },
   speaker_circle: { dur: [2.5, 4],   fields: { kicker: 'text', head: 'head', badge: 'badge?' }, obj: null,
     use: 'личное «я сделал», эмоция: спикер в круге на фоне бренда, сверху kicker + head, badge — наклонная плашка (1–2 слова)' },
-  speaker_rect:   { dur: [2.5, 4],   fields: { kicker: 'text' }, obj: ['stat_big'],
+  speaker_rect:   { dur: [2.5, 4],   fields: { kicker: 'text' }, obj: ['stat_big'], objOptional: true,
     use: 'результат/итог с цифрой: тёмный фон, спикер в прямоугольнике, сверху счётчик stat_big' },
   card_over_blur: { dur: [3, 8],     fields: {}, obj: ['checklist'],
     use: 'перечисление, шаги, возможности: спикер размыт, белая карточка с чек-листом, пункты появляются, когда произнесены' },
@@ -39,7 +39,7 @@ export const RULES = {
   heavyShare: 0.5,                      // slide_full + card_over_blur ≤ 50% времени
   heavy: ['slide_full', 'card_over_blur'],
   headLineMax: 18,                      // капс-заголовок: символов в строке
-  kickerMax: 28, hookTextMax: 34, badgeMax: 12, keywordMax: 10, cardItemMax: 18, checkItemMax: 34, ctaTextMax: 40,
+  kickerMax: 28, hookTextMax: 34, badgeMax: 12, keywordMax: 10, cardItemMax: 18, checkItemMax: 64, ctaTextMax: 40,
   snap: 0.35,                           // *_at притягивается к началу слова ближе этого, с
 };
 

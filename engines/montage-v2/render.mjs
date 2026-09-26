@@ -378,7 +378,8 @@ export function build({ plan, words, skin: SKIN, speaker, outDir, bgPng, gsap })
           chain: [tr([{ p: 'x', from: -60, to: 0, t: it.at, d: 0.3, e: 'power3.out' }, { p: 'a', from: 0, to: 1, t: it.at, d: 0.3, e: 'power3.out' }], 0, 0), cardChain] });
       }
     }
-    if (s.c === 'speaker_rect' && s.object.c === 'stat_big') {
+    if (s.c === 'speaker_rect' && !s.object) G.element({ t0: s.t0, t1: s.t1, parts: [kickerPart(s.kicker, 300, SKIN.muted)] });
+    if (s.c === 'speaker_rect' && s.object?.c === 'stat_big') {
       const o = s.object;
       G.element({ t0: s.t0, t1: s.t1, parts: [kickerPart(s.kicker, 300, SKIN.muted)] });
       const f = FONTS.disp900, sz = fitSize(f, 300, [o.prefix + o.value + o.suffix], 960), top = 390 + (300 - sz) / 2;
