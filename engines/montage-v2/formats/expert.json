@@ -1,0 +1,8 @@
+{
+  "id": "expert",
+  "name": "Эксперт: тезис → кейс → цифра → призыв",
+  "style": "reference",
+  "description": "Говорящая голова с хуком в первые 2 с, 5–10 сцен, в конце призыв написать слово в комментариях.",
+  "components": ["talking", "slide_full", "speaker_circle", "speaker_rect", "card_over_blur", "broll_own", "cta"],
+  "rules": {}
+}

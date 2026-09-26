@@ -131,6 +131,19 @@ docker exec -it n8n-media-render node /opt/engines/html-render/render.mjs --help
 
 ---
 
+## 3а. Гибридный монтаж — montage-v2 (в разработке)
+
+**Что это.** MONTAGE v2 GENESIS: JSON-план из каталога компонентов (агент-режиссёр) + слова whisper + видео спикера → ролик 1080×1920.
+Сцены без спикера — HyperFrames, остальное — ffmpeg + libass. Код: `engines/montage-v2/` (README там же).
+
+**Где лежит сейчас.** Пока **не запечён в образ**: копия в томе `/data/files/montage-v2/engine/montage-v2/`, запуск
+`docker exec n8n-media-render sh /data/files/montage-v2/run.sh <jobDir> [ядра]`. Для прода: `COPY engines/montage-v2` в `Dockerfile.render`,
+шим `montage-v2`, установка chrome-headless-shell (в образе нет `unzip`; сейчас браузер лежит в `/data/files/montage-v2-pilot/chrome-headless-shell`).
+
+**Формат.** `montage-v2 validate plan.json words.json` → `{ok, errors, warnings, plan}`; `montage-v2 render <jobDir>` → `{ok, out, ms, warnings}`.
+
+---
+
 ## 4. Проверка всех движков одной командой
 
 - На сервере: `bash /opt/n8n-install/install-extras.sh --check`

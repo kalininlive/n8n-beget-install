@@ -1,0 +1,10 @@
+{
+  "id": "reference",
+  "name": "Эталон: моушен-графика в цвете бренда",
+  "status": "approved",
+  "approved": "2026-09-26",
+  "reference_video": "genesis-n8n/pilot/montage-v2/reference-31s.mp4",
+  "description": "Живой спикер чередуется с графикой каждые 2–5 с: слайды цвета бренда с карточками, спикер в круге и в скруглённом прямоугольнике, белая карточка-чеклист на размытом спикере, счётчик цифры, кинетические титры (капс-акцент, каждая третья фраза в плашке бренда). Шрифты Inter Display Black / Inter Extra Bold.",
+  "fits": "эксперт в кадре, говорящая голова, продажи и кейсы, 20–90 с",
+  "components": ["talking", "slide_full", "speaker_circle", "speaker_rect", "card_over_blur", "broll_own", "cta"]
+}

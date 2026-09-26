@@ -1,0 +1,12 @@
+{
+  "name": "brand_blue",
+  "brand": "#1E6BFF",
+  "brandLight": "#3B82FF",
+  "brandDeep": "#1450D8",
+  "dark": "#0B0F1A",
+  "ink": "#0E1116",
+  "white": "#FFFFFF",
+  "muted": "#9FB4D9",
+  "rule": "#E6E9F0",
+  "card": "#111318"
+}
