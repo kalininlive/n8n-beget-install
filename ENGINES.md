@@ -23,7 +23,7 @@
 **Что это.** Фабрика вертикальных роликов 1080×1920 @ 60 fps на Remotion: React-композиции (`MascotFactoryReel`, `CoreSmokeTest`, …), персонаж, виджеты, субтитры по пословным таймкодам Edge-TTS.
 
 **Где лежит.**
-- Рантайм: образ `n8n-media-render` — `@remotion/cli`, `remotion`, `hyperframes` глобально, Chromium `/usr/bin/chromium`, ffmpeg.
+- Рантайм: образ `n8n-media-render` — `@remotion/cli`, `remotion`, `hyperframes`, `gsap` глобально, Chromium `/usr/bin/chromium`, ffmpeg.
 - Проект: том `/opt/n8n-install/data/studio-engine/` (`src/index.ts`, `public/`, `scripts/`, `node_modules/` — ставится `npm ci` внутри контейнера). Вне git на сервере; источник `D:/ANTIGRAVITY PACK/video-production-test-agy`.
 - `WORKDIR` контейнера = `/data/studio-engine`.
 
@@ -86,6 +86,13 @@ stdout — один JSON: `{ok, engine, jobDir, out, width, height, scale, count
 <link rel="stylesheet" href="file:///data/studio-engine/public/fonts/fonts.css">
 <img src="file:///data/studio-engine/public/assets/characters/genesis/pointing.png">
 ```
+**GSAP в HTML** (есть в образе по умолчанию, версия — `ARG GSAP_VERSION` в `Dockerfile.render`):
+```html
+<script src="file:///opt/engines/vendor/gsap/gsap.min.js"></script>
+<script src="file:///opt/engines/vendor/gsap/ScrollTrigger.min.js"></script> <!-- плагины из той же папки -->
+```
+В Node-скриптах контейнера `require('gsap')` / `import gsap from 'gsap'` работает через `NODE_PATH=/usr/local/lib/node_modules`. CDN-ссылки на GSAP не использовать — см. ниже про прокси и `networkidle0`.
+
 Google Fonts CDN в HTML работать не будет, если у контейнера нет интернета через прокси — используйте `fonts.css`. Chromium запущен с `--allow-file-access-from-files --disable-web-security`, поэтому `file://` → `file://` разрешён.
 
 **Ручная отладка.**

@@ -1,6 +1,7 @@
 # Образ n8n-media-render: движки рендера для n8n (см. ENGINES.md / STACK.md)
 #   - remotion / @remotion/cli / hyperframes  → маскот-видео (/data/studio-engine)
 #   - engines/html-render (puppeteer-core)     → HTML → PNG карусели
+#   - gsap (глобально + /opt/engines/vendor/gsap) → анимации в HTML/HyperFrames без CDN
 # Chromium системный (/usr/bin/chromium), ни один пакет браузер не скачивает.
 # Пересборка: docker compose build n8n-media-render && docker compose up -d n8n-media-render
 
@@ -33,12 +34,24 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_SKIP_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV CHROMIUM_PATH=/usr/bin/chromium
+# HyperFrames сам делает `npm i -g hyperframes@latest` при запуске CLI — версия должна задаваться только здесь (2026-09-26: так уехал 0.8.30 → 0.8.78)
+ENV HYPERFRAMES_NO_UPDATE_CHECK=1
 
 # Движок маскота (Remotion CLI глобально; сам проект живёт в томе /data/studio-engine)
 # Версии закреплены = текущее состояние сервера (проект studio-engine на 4.0.515 совместим). Поднимать осознанно.
 ARG REMOTION_VERSION=4.0.521
 ARG HYPERFRAMES_VERSION=0.8.30
 RUN npm install -g @remotion/cli@${REMOTION_VERSION} remotion@${REMOTION_VERSION} hyperframes@${HYPERFRAMES_VERSION}
+
+# GSAP по умолчанию: локально, без CDN (у контейнера интернет только через прокси, networkidle0 ждёт внешние скрипты)
+#   HTML (render-html, hyperframes): <script src="file:///opt/engines/vendor/gsap/gsap.min.js"></script> (+ плагины из той же папки)
+#   Node (require/import 'gsap'):    через NODE_PATH
+ARG GSAP_VERSION=3.15.0
+RUN npm install -g gsap@${GSAP_VERSION} \
+    && mkdir -p /opt/engines/vendor \
+    && ln -s /usr/local/lib/node_modules/gsap/dist /opt/engines/vendor/gsap \
+    && test -f /opt/engines/vendor/gsap/gsap.min.js
+ENV NODE_PATH=/usr/local/lib/node_modules
 
 # Движок html-render (карусели): версионируется вместе с этим Dockerfile
 COPY engines/html-render /opt/engines/html-render

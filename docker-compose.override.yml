@@ -60,6 +60,7 @@ services:
     - NO_PROXY=${NO_PROXY}
     - PIXABAY_API_KEY=${PIXABAY_API_KEY}
     - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+    - HYPERFRAMES_NO_UPDATE_CHECK=1
   sandbox-certs:
     image: ghcr.io/n8n-io/n8n-sandbox-service-api:1.2.0
     container_name: sandbox-certs
