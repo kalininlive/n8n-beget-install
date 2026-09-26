@@ -91,7 +91,7 @@ export function validate(input, words, { duration, render = false } = {}) {
       if (!C.obj || !C.obj.includes(o.c)) err(i, `${s.c}: объект "${o.c}" не подходит (можно: ${(C.obj || ['—']).join(', ')})`);
       else checkObject(i, s, o, err);
     }
-    if (render && s.c === 'broll_own' && !s.src) err(i, 'broll_own: не подобран ролик (нет src) — сначала поиск в genesis_websansay.brolls');
+    if (render && s.c === 'broll_own' && !s.src) warn(i, 'broll_own: своего ролика не нашлось (нет src) — сцена будет речью спикера');
     if (last && Math.abs(s.t1 - DUR) > 0.3) err(i, `последняя сцена кончается в ${s.t1}, а ролик длится ${DUR} с`);
     if (last) s.t1 = DUR;
   });

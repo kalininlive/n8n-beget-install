@@ -102,6 +102,14 @@ async function main() {
     const duration = planIn.duration || Math.floor(probeDur(speaker) * 30) / 30;
     const v = validate(planIn, words, { duration, render: true });
     if (!v.ok) { out({ ok: false, error: 'план не прошёл проверку', errors: v.errors, warnings: v.warnings }); process.exit(1); }
+    // broll_own без ролика -> речь спикера; соседние talking склеиваются (переход «сам в себя» не нужен)
+    const sc = [];
+    for (const s of v.plan.scenes) {
+      const c = s.c === 'broll_own' && !s.src ? { t0: s.t0, t1: s.t1, c: 'talking' } : s;
+      const last = sc[sc.length - 1];
+      if (c.c === 'talking' && last?.c === 'talking') last.t1 = c.t1; else sc.push(c);
+    }
+    v.plan.scenes = sc;
     T.validate = now();
     const skin = v.plan.skinResolved; delete v.plan.skinResolved;
     const wd = path.join(job, 'mv2');
