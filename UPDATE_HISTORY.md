@@ -11,3 +11,4 @@
 [2026-09-25] faster-whisper (speaches 0.8.3-cpu, контейнер faster-whisper, шим whisper, WHISPER_* в .env); шим ffprobe забран в репо
 [2026-09-25] telegram-bot-api-proxy (nginx: файлы local-режима по HTTP); @genesis_content_bot переведён на локальный Bot API (logOut облака, креды VuynFjARrXpGjLon + ogiJfZHCx5LEOPIe → http://telegram-bot-api-proxy)
 [2026-09-25] Ежечасная уборка временных файлов (scripts/cleanup_data.sh + cron); @dl_filemontage_wsbot переведён на локальный Bot API
+[2026-09-26] n8n-media-render: GSAP 3.15.0 по умолчанию (file:///opt/engines/vendor/gsap/, NODE_PATH), HYPERFRAMES_NO_UPDATE_CHECK=1 (HyperFrames закреплён на 0.8.30); коммит 85ad952
