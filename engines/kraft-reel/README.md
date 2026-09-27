@@ -17,10 +17,15 @@ kraft-reel --version                          # версия и найденны
 `jobDir`: `plan.json`, `words.json`, `voice.(mp3|m4a|ogg|opus|wav)`. Голос нормализуется до −14 LUFS.
 `words.json` — `[{w,s,e}]`, ответ edge-tts `speech-with-timestamps` (`words:[{word,start,end}]`) или whisper verbose_json.
 
+## Стили, цвета, форматы
+
+Стиль «Крафт» — `styles/kraft/`, палитры — `skins/`, форматы — `formats/`. Как добавить цвет клиента, новый стиль или сцену — **[STYLES.md](STYLES.md)**.
+`kraft-reel styles --all` — что есть сейчас (черновики видны только с `--all`; агенту и в меню бота попадают `approved`).
+
 ## План агента
 
 ```json
-{ "handle": "@websansay", "seed": 123, "colors": { "acc": "#D97454" },
+{ "style": "kraft", "format": "universal", "skin": "#1E6BFF", "handle": "@websansay", "seed": 123,
   "scenes": [ { "type": "hook_link", "w": [0, 13], "headline": "Этот *GENESIS* бот …", "pills": ["в любом стиле"] }, … ] }
 ```
 `w` — индексы первого и последнего слова сцены в `words.json`. Сцены подряд, без дыр. Типы: `hook_link`, `title`,
@@ -36,7 +41,9 @@ kraft-reel --version                          # версия и найденны
 | `render.mjs` | план → `index.html` (сцены, переходы, эмиттер карточек) |
 | `lib/city.mjs` | генератор пейзажей и птиц (seed) |
 | `lib/mini.mjs` | мини-экраны для карточек |
-| `lib/style.css` | вёрстка стиля (`${токены}` палитры) |
+| `styles.mjs` | загрузка стилей/скинов/форматов, палитра из акцента (контраст, производные оттенки) |
+| `styles/<id>/` | стиль: `style.json` (описание, меню, декор, сцены) + `style.css` |
+| `skins/`, `formats/` | палитры и форматы (данные) |
 | `voice.mjs` | чистка голосового: куски из cut.json, паузы > 0,2 с по звуку (silencedetect, порог = средняя громкость − 16 дБ) → 0,1 с |
 | `tests/pilot/` | план пилота (51 с) для замеров и регрессии |
 

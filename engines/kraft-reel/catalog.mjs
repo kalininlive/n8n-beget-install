@@ -1,4 +1,6 @@
-// Каталог сцен стиля «Крафт» — всё, что должен знать агент-режиссёр. Источник правды для validate и для промпта.
+// Каталог сцен kraft-reel — всё, что должен знать агент-режиссёр. Источник правды для validate и для промпта.
+// Сцены (компоненты) общие; стиль и формат сужают список разрешённых (styles/<id>/style.json, formats/<id>.json).
+import { getStyle, getFormat } from './styles.mjs';
 // maxWords — лимиты текста на экране (слова через пробел), n — сколько элементов в списке.
 
 export const ICONS = ['doc', 'spark', 'tg', 'play', 'chart'];
@@ -94,19 +96,35 @@ export const PLAN_EXAMPLE = {
   ],
 };
 
-export function agentSpec() {
-  return { style: 'kraft', name: 'Крафт', components: COMPONENTS, icons: ICONS, rules: RULES, plan_example: PLAN_EXAMPLE };
+// разрешённые сцены = сцены стиля ∩ сцены формата
+export function allowed(styleId = 'kraft', formatId) {
+  const st = getStyle(styleId || 'kraft');
+  if (!st) return null;
+  const fm = getFormat(formatId || st.default_format || 'universal');
+  const comps = (st.components || Object.keys(COMPONENTS)).filter((c) => COMPONENTS[c] && (!fm || fm.components.includes(c)));
+  return { style: st, format: fm, comps };
 }
 
-export function agentMd() {
-  const L = ['# Стиль «Крафт» — сцены', '', 'Тёплая бумага, линейный пейзаж внизу рисуется заново в каждой сцене, оранжевый акцент, тёмные окна-приложения. Без спикера, только голос.', '', '## Сцены (поле "type")'];
-  for (const [id, c] of Object.entries(COMPONENTS)) {
+export function agentSpec(styleId, formatId) {
+  const a = allowed(styleId, formatId) || allowed('kraft');
+  return { style: a.style.id, name: a.style.name, description: a.style.description, format: a.format?.id, components: Object.fromEntries(a.comps.map((c) => [c, COMPONENTS[c]])),
+    icons: ICONS, rules: RULES, rules_format: a.format?.rules || {}, plan_example: PLAN_EXAMPLE };
+}
+
+export function agentMd(styleId, formatId) {
+  const a = allowed(styleId, formatId) || allowed('kraft');
+  const L = [`# Стиль «${a.style.name}» — сцены`, '', a.style.description];
+  if (a.format) L.push(`Формат «${a.format.name}»: ${a.format.description}`);
+  if (a.format?.rules?.max_scenes) L.push(`Не больше ${a.format.rules.max_scenes} сцен.`);
+  L.push('', '## Сцены (поле "type") — только эти');
+  for (const id of a.comps) { const c = COMPONENTS[id];
     L.push(`- **${id}** ${c.duration[0]}–${c.duration[1]} с — ${c.use}.`);
     for (const [f, d] of Object.entries(c.fields)) L.push(`  - \`${f}\`${d.required ? ' (обязательно)' : ''}: ${d.type === 'list' ? `список ${d.n[0]}–${d.n[1]}, ` : ''}${d.maxWords ? `≤ ${d.maxWords} слов` : d.maxChars ? `≤ ${d.maxChars} символов` : ''}${d.note ? ` — ${d.note}` : ''}`);
     if (c.kinds) for (const [k, v] of Object.entries(c.kinds)) L.push(`  - content.kind = **${k}**: ${v}`);
   }
   L.push('', '## Иконки', ICONS.join(', '), '', '## Правила');
   RULES.forEach((r) => L.push(`- ${r}`));
-  L.push('', '## Пример плана (w — индексы слов из списка слов речи)', '```json', JSON.stringify(PLAN_EXAMPLE), '```');
+  const ex = { scenes: PLAN_EXAMPLE.scenes.filter((x) => a.comps.includes(x.type)) };
+  L.push('', '## Пример плана (w — индексы слов из списка слов речи)', '```json', JSON.stringify(ex), '```');
   return L.join('\n');
 }

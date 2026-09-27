@@ -1,0 +1,15 @@
+{
+  "id": "universal",
+  "name": "Универсальный",
+  "description": "Любые сцены стиля: хук → демонстрация/доказательства в окнах → возражение → призыв.",
+  "components": [
+    "hook_link",
+    "title",
+    "window",
+    "thought",
+    "question",
+    "radial",
+    "cta"
+  ],
+  "rules": {}
+}

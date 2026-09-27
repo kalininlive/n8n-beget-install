@@ -17,7 +17,7 @@ export function mini(kind, C, extra = '') {
       break;
     case 'orb':
       bg = '#141312';
-      body = `<i class="orb" style="left:1.5em;top:5em;width:7em;height:7em;border-radius:50%;background:radial-gradient(circle,#F6C27A 0%,${C.acc} 30%,rgba(217,116,84,0) 70%)"></i>${line(5, 1.4, 'rgba(255,255,255,.5)', 2.5)}${line(3, 15.2, 'rgba(255,255,255,.35)', 3.5)}`;
+      body = `<i class="orb" style="left:1.5em;top:5em;width:7em;height:7em;border-radius:50%;background:radial-gradient(circle,${C.orbCore} 0%,${C.acc} 30%,rgba(${C.accRgb},0) 70%)"></i>${line(5, 1.4, 'rgba(255,255,255,.5)', 2.5)}${line(3, 15.2, 'rgba(255,255,255,.35)', 3.5)}`;
       break;
     case 'accent':
       bg = `linear-gradient(160deg,${C.acc},#B9573A)`;

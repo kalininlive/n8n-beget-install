@@ -1,0 +1,39 @@
+{
+  "id": "kraft",
+  "name": "Крафт",
+  "status": "approved",
+  "approved": "2026-09-27",
+  "menu": {
+    "title": "🟫 Крафт",
+    "intro": "тёплая бумага, линейный город, окна-приложения, без персонажа"
+  },
+  "reference_video": "genesis-n8n/pilot/mascot-paper/reference-new2.mp4",
+  "pilot": "genesis-n8n/pilot/mascot-paper/paper-pilot-v2.mp4",
+  "description": "Тёплая бумага с зерном, внизу линейный пейзаж, который рисуется заново в каждой сцене; оранжевый акцент, тёмные окна-приложения, карточки-ролики, кинетический текст по словам.",
+  "fits": "экспертные и продающие рилсы без съёмок, 20–70 с, голос за кадром",
+  "skin": "kraft",
+  "css": "style.css",
+  "default_format": "universal",
+  "decor": {
+    "landscapes": [
+      "city",
+      "village",
+      "park"
+    ],
+    "birds": [
+      4,
+      5
+    ],
+    "sun": 0.6,
+    "clouds": 2
+  },
+  "components": [
+    "hook_link",
+    "title",
+    "window",
+    "thought",
+    "question",
+    "radial",
+    "cta"
+  ]
+}

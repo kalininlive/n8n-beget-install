@@ -1,0 +1,14 @@
+{
+  "id": "short",
+  "name": "Короткий (до 25 с)",
+  "description": "Хук → одно-два окна с доказательством → призыв. Без разделителей и лучей.",
+  "components": [
+    "hook_link",
+    "window",
+    "question",
+    "cta"
+  ],
+  "rules": {
+    "max_scenes": 5
+  }
+}

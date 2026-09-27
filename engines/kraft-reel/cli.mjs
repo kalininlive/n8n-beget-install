@@ -1,18 +1,20 @@
 #!/usr/bin/env node
 // kraft-reel — ролики стиля «Крафт» (МАСКОТ без маскота): голос + пословные тайминги + план агента → HyperFrames.
 //
-//   kraft-reel catalog [--md]
-//       сцены, поля, лимиты, правила и пример плана для агента-режиссёра (JSON или markdown для промпта)
+//   kraft-reel catalog [--md] [--style kraft] [--format universal]
+//       сцены, поля, лимиты, правила и пример плана для агента-режиссёра — только разрешённые стилем и форматом
+//   kraft-reel styles [--all]
+//       стили (утверждённые; --all — и черновики), скины, форматы — для людей и для скрипта меню бота
 //   kraft-reel validate <plan.json> <words.json> [--duration 51.2]
 //       stdout {ok, errors[], warnings[], plan} — plan с посчитанными start/end. Код 1, если errors.
-//   kraft-reel render <jobDir> [--out file.mp4] [--cover file.jpg] [--workers 3] [--seed N] [--keep]
+//   kraft-reel render <jobDir> [--out file.mp4] [--cover file.jpg] [--workers 3] [--seed N] [--skin имя|#RRGGBB] [--draft] [--keep]
 //       jobDir: plan.json, words.json, voice.(mp3|m4a|ogg|wav|opus). stdout {ok, out, cover, duration, ms, warnings}; прогресс — в stderr.
 //   kraft-reel voice-cut <src> <cut.json> --out voice.mp3 [--b64]
 //       чистка голосового: оставить куски cut.segments, шумодав, −14 LUFS; stdout {ok, out, duration, words:[{word,start,end}], audio_base64?}
 //   kraft-reel --version
 //
 // words.json: [{w,s,e}] (с), edge-tts {words:[{word,start,end}]}, whisper verbose_json ({words|segments[].words}).
-// В plan.json можно передать handle ("@ник"), seed, colors ({acc:"#D97454", …}) — иначе значения стиля.
+// В plan.json: style (kraft), format (universal|short), skin (имя скина или "#RRGGBB" акцента), colors ({acc, bg1, …}), handle ("@ник"), seed.
 import fs from 'fs';
 import path from 'path';
 import { execFileSync, spawnSync } from 'child_process';
@@ -20,6 +22,7 @@ import { fileURLToPath } from 'url';
 import { validate } from './validate.mjs';
 import { buildHtml } from './render.mjs';
 import { agentSpec, agentMd } from './catalog.mjs';
+import { styles, skins, formats } from './styles.mjs';
 import { hash } from './lib/city.mjs';
 import { voiceCut } from './voice.mjs';
 
@@ -60,12 +63,13 @@ function main() {
     return;
   }
   if (cmd === '--version') return out({ engine: 'kraft-reel', version: VERSION, browser: findBrowser() || null });
-  if (cmd === 'catalog') return flag('--md') ? process.stdout.write(agentMd() + '\n') : out(agentSpec());
+  if (cmd === 'catalog') return flag('--md') ? process.stdout.write(agentMd(opt('--style'), opt('--format')) + '\n') : out(agentSpec(opt('--style'), opt('--format')));
+  if (cmd === 'styles') return out({ styles: styles().filter((s) => flag('--all') || s.status === 'approved').map(({ dir, ...s }) => s), skins: skins().map((s) => ({ id: s.id, name: s.name })), formats: formats() });
 
   if (cmd === 'validate') {
     const [, pf, wf] = argv;
     if (!pf || !wf) fail('usage: validate <plan.json> <words.json>');
-    const r = validate(readJson(pf), loadWords(readJson(wf)), { duration: +opt('--duration', 0) || undefined });
+    const r = validate(readJson(pf), loadWords(readJson(wf)), { duration: +opt('--duration', 0) || undefined, draft: flag('--draft') });
     out(r);
     process.exit(r.ok ? 0 : 1);
   }
@@ -89,7 +93,7 @@ function main() {
     const words = loadWords(readJson(path.join(job, 'words.json')));
     const planIn = readJson(path.join(job, 'plan.json'));
     const duration = Math.round((probeDur(voice) + .5) * 100) / 100;
-    const v = validate(planIn, words, { duration });
+    const v = validate(planIn, words, { duration, draft: flag('--draft') });
     if (!v.ok) fail('план не прошёл проверку', { errors: v.errors, warnings: v.warnings });
     T.validate = Date.now();
 
@@ -99,7 +103,7 @@ function main() {
     // голос в m4a: HyperFrames надёжнее всего читает AAC
     execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', voice, '-af', 'loudnorm=I=-14:TP=-1.5:LRA=11', '-ar', '48000', '-c:a', 'aac', '-b:a', '192k', path.join(wd, 'assets', 'voice.m4a')]);
     fs.copyFileSync(fs.existsSync(GSAP) ? GSAP : path.join(HERE, 'vendor', 'gsap.min.js'), path.join(wd, 'assets', 'gsap.min.js'));
-    const plan = { ...v.plan, voice: 'assets/voice.m4a', handle: planIn.handle ?? '', colors: planIn.colors,
+    const plan = { ...v.plan, voice: 'assets/voice.m4a', handle: planIn.handle ?? '', colors: planIn.colors, skin: opt('--skin', planIn.skin),
       seed: +opt('--seed', planIn.seed ?? hash(words.map((w) => w.w).join(' '))) };
     fs.writeFileSync(path.join(wd, 'index.html'), buildHtml(plan));
     T.build = Date.now();
@@ -120,7 +124,7 @@ function main() {
     if (!flag('--keep')) fs.rmSync(wd, { recursive: true, force: true });
     const sec = (a, b) => Math.round((T[b] - T[a]) / 100) / 10;
     return out({ ok: true, out: outFile, cover, duration: plan.duration, size_mb: Math.round(fs.statSync(outFile).size / 1e5) / 10,
-      ms: { validate: sec('start', 'validate'), build: sec('validate', 'build'), render: sec('build', 'render'), total: sec('start', 'render') }, warnings: v.warnings });
+      style: plan.style, format: plan.format, ms: { validate: sec('start', 'validate'), build: sec('validate', 'build'), render: sec('build', 'render'), total: sec('start', 'render') }, warnings: [...v.warnings, ...(plan.warnings || [])] });
   }
   fail(`неизвестная команда "${cmd}" (catalog | validate | render | --version | --help)`);
 }

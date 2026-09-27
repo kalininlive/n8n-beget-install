@@ -1,3 +1,4 @@
+/* Стиль «Крафт»: вёрстка. ${токен} — цвета палитры (skins/*.json + производные акцента, см. styles.mjs). */
   @font-face { font-family: "Inter Display"; font-weight: 900; src: local("Inter Display Black"); }
   @font-face { font-family: "Inter Display"; font-weight: 800; src: local("Inter Display Extra Bold"); }
   @font-face { font-family: "Inter"; font-weight: 800; src: local("Inter Extra Bold"); }
@@ -8,11 +9,11 @@
   .abs { position: absolute; }
   #bg { left: 0; top: 0; width: ${W}px; height: ${H}px; background: radial-gradient(95% 55% at 50% 38%, ${bg1} 0%, ${bg2} 62%, ${bg3} 100%); }
   #grain { left: 0; top: 0; width: ${W}px; height: ${H}px; background-image: ${noise}; opacity: .55; }
-  #ground { left: 0; top: 1760px; width: ${W}px; height: 160px; background: linear-gradient(180deg, rgba(210,195,170,0) 0%, rgba(210,195,170,.35) 100%); }
+  #ground { left: 0; top: 1760px; width: ${W}px; height: 160px; background: linear-gradient(180deg, rgba(${groundRgb},0) 0%, rgba(${groundRgb},.35) 100%); }
   .city { left: -80px; top: 1480px; }
   #veil { left: 0; top: 0; width: ${W}px; height: ${H}px; background: #8A837A; opacity: 0; z-index: 20; }
-  #handle { left: 390px; width: 300px; top: 1440px; text-align: center; font-family: Inter, sans-serif; font-weight: 800; font-size: 24px; letter-spacing: .08em; color: #9A907F; z-index: 2;
-    background: rgba(241,235,223,.85); border-radius: 30px; padding: 6px 0; }
+  #handle { left: 390px; width: 300px; top: 1440px; text-align: center; font-family: Inter, sans-serif; font-weight: 800; font-size: 24px; letter-spacing: .08em; color: ${handle}; z-index: 2;
+    background: rgba(${bg1Rgb},.85); border-radius: 30px; padding: 6px 0; }
   .scene { left: 0; top: 0; width: ${W}px; height: ${H}px; z-index: 3; }
   .cam { position: absolute; left: 0; top: 0; width: ${W}px; height: ${H}px; transform-origin: 50% 45%; }
   .head { text-align: center; font-weight: 900; line-height: 1.04; letter-spacing: -0.02em; }
@@ -23,31 +24,31 @@
   .ast { color: ${acc}; font-style: normal; font-size: .8em; }
   .prow { position: absolute; left: 0; width: ${W}px; display: flex; justify-content: center; }
   .uline { width: 190px; height: 6px; border-radius: 3px; background: ${acc}; }
-  .icon { position: absolute; width: 170px; height: 170px; border-radius: 42px; background: #FFFDF8; display: flex; align-items: center; justify-content: center; z-index: 3;
-    box-shadow: 0 18px 38px rgba(90,70,40,.16), 0 2px 5px rgba(90,70,40,.08), inset 0 -3px 0 rgba(90,70,40,.05); }
+  .icon { position: absolute; width: 170px; height: 170px; border-radius: 42px; background: ${paper}; display: flex; align-items: center; justify-content: center; z-index: 3;
+    box-shadow: 0 18px 38px rgba(${shadowRgb},.16), 0 2px 5px rgba(${shadowRgb},.08), inset 0 -3px 0 rgba(${shadowRgb},.05); }
   .icon svg { width: 100px; height: 100px; }
-  .icon.glow { box-shadow: 0 10px 50px rgba(217,116,84,.35), 0 18px 38px rgba(90,70,40,.14); }
-  .icon.big { width: 200px; height: 200px; border-radius: 50px; box-shadow: 0 12px 60px rgba(217,116,84,.4), 0 18px 38px rgba(90,70,40,.16); }
+  .icon.glow { box-shadow: 0 10px 50px rgba(${accRgb},.35), 0 18px 38px rgba(${shadowRgb},.14); }
+  .icon.big { width: 200px; height: 200px; border-radius: 50px; box-shadow: 0 12px 60px rgba(${accRgb},.4), 0 18px 38px rgba(${shadowRgb},.16); }
   .icon.big svg { width: 118px; height: 118px; }
   .ring { position: absolute; inset: -6px; border-radius: 48px; border: 3px solid ${acc}; opacity: 0; }
   .icon.big .ring { border-radius: 56px; }
-  .ldot { position: absolute; width: 22px; height: 22px; border-radius: 50%; background: ${acc}; box-shadow: 0 0 0 7px rgba(217,116,84,.22); z-index: 2; }
+  .ldot { position: absolute; width: 22px; height: 22px; border-radius: 50%; background: ${acc}; box-shadow: 0 0 0 7px rgba(${accRgb},.22); z-index: 2; }
   .mp { position: relative; width: 10em; height: 17.6em; border-radius: 1.1em; overflow: hidden; box-shadow: 0 .8em 1.8em rgba(40,30,20,.28); border: .12em solid rgba(255,255,255,.7); }
   .mp i, .mp b { position: absolute; display: block; }
-  .pill { display: flex; align-items: center; gap: 14px; background: #FFFDF8; border-radius: 40px; padding: 12px 30px 12px 16px; font-family: Inter, sans-serif; font-weight: 800; font-size: 36px; box-shadow: 0 8px 22px rgba(90,70,40,.13); }
+  .pill { display: flex; align-items: center; gap: 14px; background: ${paper}; border-radius: 40px; padding: 12px 30px 12px 16px; font-family: Inter, sans-serif; font-weight: 800; font-size: 36px; box-shadow: 0 8px 22px rgba(${shadowRgb},.13); }
   .pill svg { width: 40px; height: 40px; }
   .stk { position: relative; display: inline-block; }
   .stk b { position: absolute; left: -8px; right: -8px; top: 52%; height: 8px; background: ${ink}; border-radius: 4px; }
-  .reply { background: ${acc}; color: #fff; font-weight: 900; font-size: 72px; padding: 8px 44px 18px; border-radius: 24px; box-shadow: 0 18px 38px rgba(217,116,84,.38), inset 0 -5px 0 rgba(0,0,0,.08); white-space: nowrap; }
-  .qmark { width: 180px; height: 180px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #E68A6B, ${acc} 55%, #BF5E40); color: #fff; font-weight: 900; font-size: 122px; display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 20px 44px rgba(217,116,84,.42), inset 0 -6px 0 rgba(0,0,0,.08); }
-  .ray { position: absolute; left: 0; top: 0; height: 4px; background: linear-gradient(90deg, ${acc}, rgba(217,116,84,.35)); transform-origin: 0 50%; border-radius: 2px; }
+  .reply { background: ${acc}; color: #fff; font-weight: 900; font-size: 72px; padding: 8px 44px 18px; border-radius: 24px; box-shadow: 0 18px 38px rgba(${accRgb},.38), inset 0 -5px 0 rgba(0,0,0,.08); white-space: nowrap; }
+  .qmark { width: 180px; height: 180px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, ${accLight}, ${acc} 55%, ${accDeep}); color: #fff; font-weight: 900; font-size: 122px; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 20px 44px rgba(${accRgb},.42), inset 0 -6px 0 rgba(0,0,0,.08); }
+  .ray { position: absolute; left: 0; top: 0; height: 4px; background: linear-gradient(90deg, ${acc}, rgba(${accRgb},.35)); transform-origin: 0 50%; border-radius: 2px; }
   .rmini { font-size: 7.6px; }
   .stage { position: absolute; left: 0; top: 0; width: ${W}px; height: ${H}px; perspective: 1800px; }
   .win { position: absolute; left: 90px; top: 240px; width: 900px; height: 1050px; border-radius: 30px; background: ${win}; box-shadow: 0 50px 90px rgba(40,30,20,.38), 0 0 0 2px rgba(255,255,255,.04) inset; overflow: hidden; transform-origin: 50% 55%; }
   .bar3 { height: 70px; display: flex; align-items: center; padding: 0 28px; gap: 12px; position: relative; border-bottom: 2px solid #2A2724; }
   .bar3 i { width: 18px; height: 18px; border-radius: 50%; }
-  .bar3 span { position: absolute; left: 0; right: 0; text-align: center; font-family: Inter, sans-serif; font-weight: 700; font-size: 26px; color: #A8A197; }
+  .bar3 span { position: absolute; left: 0; right: 0; text-align: center; font-family: Inter, sans-serif; font-weight: 700; font-size: 26px; color: ${mutedDark}; }
   .bar3 em { color: ${acc}; font-style: normal; }
   .wbody { position: relative; padding: 34px 40px; height: 980px; }
   .code { position: relative; font-family: "JetBrains Mono", "DejaVu Sans Mono", "Consolas", monospace; font-weight: 700; font-size: 36px; line-height: 1.55; white-space: pre; }
@@ -58,7 +59,7 @@
   .note i { width: 14px; height: 14px; border-radius: 50%; background: ${green}; box-shadow: 0 0 12px ${green}; }
   .thumbs { display: flex; gap: 14px; margin-top: 22px; }
   .tw { font-size: 15.2px; }
-  .strike { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); background: #FFFDF8; color: ${ink}; font-family: Inter, sans-serif; font-weight: 800; font-size: 40px; padding: 10px 36px; border-radius: 40px; white-space: nowrap; }
+  .strike { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); background: ${paper}; color: ${ink}; font-family: Inter, sans-serif; font-weight: 800; font-size: 40px; padding: 10px 36px; border-radius: 40px; white-space: nowrap; }
   .strike b { position: absolute; left: 26px; right: 26px; top: 52%; height: 5px; background: ${acc}; border-radius: 3px; transform-origin: 0 50%; }
   .gal { display: flex; gap: 18px; height: 860px; align-items: stretch; }
   .gp { flex: 1; border-radius: 22px; position: relative; overflow: hidden; }
@@ -74,34 +75,34 @@
   .gp-l { margin-top: 22px; height: 12px; width: 85%; border-radius: 6px; background: #DDD4C4; }
   .gp-l.s { margin-top: 12px; width: 60%; }
   .gp-b { position: absolute; left: 22px; right: 22px; bottom: 34px; height: 64px; border-radius: 18px; background: ${acc}; color: #fff; font-family: Inter, sans-serif; font-weight: 800; font-size: 26px; display: flex; align-items: center; justify-content: center; }
-  .gp-top { position: absolute; left: 20px; right: 20px; top: 26px; font-weight: 900; font-size: 26px; color: #EDE6D6; text-align: center; }
-  .orb { position: absolute; left: 50%; top: 150px; width: 220px; height: 220px; margin-left: -110px; border-radius: 50%; background: radial-gradient(circle, #FFE0A8 0%, #F1A765 22%, rgba(217,116,84,.55) 45%, rgba(217,116,84,0) 70%); }
+  .gp-top { position: absolute; left: 20px; right: 20px; top: 26px; font-weight: 900; font-size: 26px; color: ${onDark}; text-align: center; }
+  .orb { position: absolute; left: 50%; top: 150px; width: 220px; height: 220px; margin-left: -110px; border-radius: 50%; background: radial-gradient(circle, ${orbCore} 0%, ${orbMid} 22%, rgba(${accRgb},.55) 45%, rgba(${accRgb},0) 70%); }
   .gp-row { position: absolute; left: 10px; right: 10px; top: 420px; display: flex; gap: 8px; justify-content: center; }
   .gr { font-size: 5.6px; }
   .gp-pill { position: absolute; left: 50%; top: 560px; margin-left: -110px; width: 220px; text-align: center; white-space: nowrap; background: ${acc}; color: #fff; font-family: Inter, sans-serif; font-weight: 800; font-size: 22px; padding: 8px 0; border-radius: 20px; }
   .gp-like { position: absolute; left: 50%; bottom: 40px; margin-left: -80px; width: 160px; text-align: center; background: rgba(255,255,255,.14); color: #fff; font-family: Inter, sans-serif; font-weight: 800; font-size: 24px; padding: 8px 0; border-radius: 20px; white-space: nowrap; }
   .stats { display: flex; gap: 20px; }
   .stat { flex: 1; background: ${panel}; border-radius: 22px; padding: 22px 28px; box-shadow: inset 0 0 0 2px #34302C; }
-  .stat small { display: flex; align-items: center; gap: 10px; font-family: Inter, sans-serif; font-weight: 700; font-size: 26px; color: #A8A197; }
+  .stat small { display: flex; align-items: center; gap: 10px; font-family: Inter, sans-serif; font-weight: 700; font-size: 26px; color: ${mutedDark}; }
   .stat small svg { width: 28px; height: 28px; }
   .stat b { display: block; margin-top: 6px; font-weight: 900; font-size: 76px; color: #fff; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
   .chart { margin-top: 24px; background: ${panel}; border-radius: 22px; padding: 22px 20px 14px; box-shadow: inset 0 0 0 2px #34302C; }
-  .ch-h { display: flex; justify-content: space-between; font-family: Inter, sans-serif; font-weight: 700; font-size: 26px; color: #A8A197; margin-bottom: 10px; }
+  .ch-h { display: flex; justify-content: space-between; font-family: Inter, sans-serif; font-weight: 700; font-size: 26px; color: ${mutedDark}; margin-bottom: 10px; }
   .ch-h em { color: ${green}; font-style: normal; font-weight: 800; }
-  .badge { display: inline-block; margin-top: 26px; background: ${acc}; color: #fff; font-family: Inter, sans-serif; font-weight: 800; font-size: 32px; padding: 12px 26px; border-radius: 16px; box-shadow: 0 10px 30px rgba(217,116,84,.4); }
+  .badge { display: inline-block; margin-top: 26px; background: ${acc}; color: #fff; font-family: Inter, sans-serif; font-weight: 800; font-size: 32px; padding: 12px 26px; border-radius: 16px; box-shadow: 0 10px 30px rgba(${accRgb},.4); }
   .bgrid { position: absolute; left: 40px; right: 40px; top: 120px; height: 600px; }
   .bgrid i { position: absolute; left: 0; right: 0; height: 2px; background: #2E2A27; }
   .bars { position: absolute; left: 40px; right: 40px; bottom: 60px; display: flex; justify-content: space-around; align-items: flex-end; }
   .bar-c { width: 320px; display: flex; flex-direction: column; align-items: center; }
-  .bar-v { font-weight: 900; font-size: 44px; color: #EDE6D6; margin-bottom: 14px; }
+  .bar-v { font-weight: 900; font-size: 44px; color: ${onDark}; margin-bottom: 14px; }
   .bar { width: 230px; border-radius: 18px; background: linear-gradient(180deg, #6A645D, #4E4944); }
-  .bar.on { background: linear-gradient(180deg, #E8876A, ${acc}); box-shadow: 0 0 50px rgba(217,116,84,.35); }
-  .bar-c p { margin-top: 18px; text-align: center; font-family: Inter, sans-serif; font-weight: 800; font-size: 30px; color: #EDE6D6; line-height: 1.2; }
-  .cap { position: absolute; left: 90px; top: 1325px; width: 900px; min-height: 116px; background: ${cap}; border-radius: 22px; box-shadow: 0 18px 36px rgba(90,70,40,.18); padding: 22px 34px; display: flex; align-items: center; justify-content: center; }
+  .bar.on { background: linear-gradient(180deg, ${accLight}, ${acc}); box-shadow: 0 0 50px rgba(${accRgb},.35); }
+  .bar-c p { margin-top: 18px; text-align: center; font-family: Inter, sans-serif; font-weight: 800; font-size: 30px; color: ${onDark}; line-height: 1.2; }
+  .cap { position: absolute; left: 90px; top: 1325px; width: 900px; min-height: 116px; background: ${cap}; border-radius: 22px; box-shadow: 0 18px 36px rgba(${shadowRgb},.18); padding: 22px 34px; display: flex; align-items: center; justify-content: center; }
   .capt { font-family: Inter, sans-serif; font-weight: 800; font-size: 42px; line-height: 1.25; text-align: center; }
-  .cbox { width: 880px; height: 112px; background: #FFFDF8; border-radius: 24px; box-shadow: 0 14px 30px rgba(90,70,40,.15); display: flex; align-items: center; padding: 0 30px; gap: 20px; position: relative; font-family: Inter, sans-serif; }
+  .cbox { width: 880px; height: 112px; background: ${paper}; border-radius: 24px; box-shadow: 0 14px 30px rgba(${shadowRgb},.15); display: flex; align-items: center; padding: 0 30px; gap: 20px; position: relative; font-family: Inter, sans-serif; }
   .cbox > i { width: 46px; height: 46px; border-radius: 50%; background: linear-gradient(135deg, #DDD6C9, #C9C0B2); flex: none; }
-  .phd { flex: 1; font-weight: 700; font-size: 38px; color: #A49A89; }
+  .phd { flex: 1; font-weight: 700; font-size: 38px; color: ${phText}; }
   .typ { flex: 1; display: none; align-items: center; font-weight: 900; font-size: 40px; color: ${ink}; }
   .typ span { display: none; }
   .tcaret { display: inline-block; width: 4px; height: 42px; margin-left: 4px; background: ${ink}; }
@@ -109,5 +110,5 @@
   .ok { position: absolute; right: 30px; font-weight: 800; font-size: 32px; color: ${green}; opacity: 0; }
   .areply { left: 100px; top: 1070px; width: 880px; font-family: Inter, sans-serif; }
   .areply small { display: block; font-weight: 800; font-size: 24px; letter-spacing: .12em; color: ${acc}; margin-bottom: 10px; }
-  .areply div { position: relative; overflow: hidden; background: linear-gradient(90deg, ${acc}, #C9603F); color: #fff; font-weight: 800; font-size: 36px; padding: 20px 30px; border-radius: 18px; box-shadow: 0 12px 26px rgba(217,116,84,.3); }
+  .areply div { position: relative; overflow: hidden; background: linear-gradient(90deg, ${acc}, ${accDeep}); color: #fff; font-weight: 800; font-size: 36px; padding: 20px 30px; border-radius: 18px; box-shadow: 0 12px 26px rgba(${accRgb},.3); }
   .shine { position: absolute; top: 0; left: 0; width: 120px; height: 100%; background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.45), rgba(255,255,255,0)); transform: skewX(-20deg); }

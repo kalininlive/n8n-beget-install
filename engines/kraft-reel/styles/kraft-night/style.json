@@ -1,0 +1,34 @@
+{
+  "id": "kraft-night",
+  "name": "Крафт · Ночь",
+  "status": "draft",
+  "menu": {
+    "title": "🌙 Крафт · Ночь",
+    "intro": "тёмная бумага, мятный акцент, ночной город"
+  },
+  "description": "Вариант Крафта в тёмной гамме: тёмная бумага, мятный акцент, только городские пейзажи, без солнца. Пример стиля без кода — палитра + декор.",
+  "fits": "тех-темы, вечерние рубрики",
+  "skin": "kraft-night",
+  "css": "../kraft/style.css",
+  "default_format": "universal",
+  "decor": {
+    "landscapes": [
+      "city"
+    ],
+    "birds": [
+      2,
+      3
+    ],
+    "sun": 0,
+    "clouds": 1
+  },
+  "components": [
+    "hook_link",
+    "title",
+    "window",
+    "thought",
+    "question",
+    "radial",
+    "cta"
+  ]
+}

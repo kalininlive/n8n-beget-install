@@ -6,15 +6,17 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { rng, hash, landscape, flocks, MODE_ORDER } from './lib/city.mjs';
 import { mini, KINDS } from './lib/mini.mjs';
+import { getStyle, resolvePalette, styleCss } from './styles.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const CSS = fs.readFileSync(path.join(HERE, 'lib', 'style.css'), 'utf8');
 
 export function buildHtml(plan) {
   const W = 1080, H = 1920, DUR = plan.duration, SC = plan.scenes;
   const R = rng(plan.seed ?? hash(JSON.stringify(SC.map((s) => s.words.map((w) => w.w)))));
-  const C = { bg1: '#F1EBDF', bg2: '#EBE3D2', bg3: '#E2D5BF', ink: '#1C1A18', muted: '#7D766B', pale: '#C9C0B2', acc: '#D97454', accPale: '#F0C4B2',
-    line: '#C9B596', win: '#1F1D1B', panel: '#2A2724', green: '#3DBE6B', cap: '#F7F2E8', ...(plan.colors || {}) };
+  const warnings = plan.warnings || (plan.warnings = []);
+  const ST = getStyle(plan.style || 'kraft') || getStyle('kraft');
+  const C = resolvePalette(ST, { skin: plan.skin, colors: plan.colors }, warnings);
+  const DECOR = { landscapes: MODE_ORDER, birds: [4, 5], sun: 0.6, clouds: 2, ...(ST.decor || {}) };
 
   const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const r3 = (n) => Math.round(n * 1000) / 1000;
@@ -90,7 +92,7 @@ export function buildHtml(plan) {
         let tag = false;
         const spans = [...ln].map((ch, ci) => {
           if (ch === '<') tag = true;
-          const col = tag ? C.acc : (/["{}]/.test(ch) ? '#9FC3A6' : '#E8E2D6');
+          const col = tag ? C.acc : (/["{}]/.test(ch) ? C.codeStr || '#9FC3A6' : C.codeText);
           if (ch === ' ' || ch === '>') tag = false;
           return `<span id="${wid}c${li}_${ci}" style="color:${col}">${esc(ch)}</span>`;
         }).join('');
@@ -159,7 +161,7 @@ export function buildHtml(plan) {
       bars.forEach((b, k) => {
         const tb = k === 0 ? t0 + .45 : Math.max(t0 + 1, wordTime(sc, b.label, t0 + 1.4) - .3);
         push(`tl.from("#${wid}b${k}",{scaleY:0,transformOrigin:"50% 100%",duration:${b.accent ? .9 : .5},ease:${b.accent ? '"elastic.out(1,0.6)"' : EB}},${at(tb)});tl.from("#${wid}bv${k}",{opacity:0,y:20,duration:.3},${at(tb + .4)});`);
-        if (b.accent) push(`tl.to("#${wid}b${k}",{boxShadow:"0 0 90px rgba(217,116,84,.75)",duration:.6,yoyo:true,repeat:${Math.max(1, Math.floor((t1 - tb - 1) / .6))},ease:"sine.inOut"},${at(tb + .9)});`);
+        if (b.accent) push(`tl.to("#${wid}b${k}",{boxShadow:"0 0 90px rgba(${C.accRgb},.75)",duration:.6,yoyo:true,repeat:${Math.max(1, Math.floor((t1 - tb - 1) / .6))},ease:"sine.inOut"},${at(tb + .9)});`);
       });
     }
     // подпись под окном: фразы по 5–7 слов, слова из бледного в цвет
@@ -273,7 +275,8 @@ export function buildHtml(plan) {
   let lastMode = '';
   const cities = SC.map((sc, i) => {
     let mode;
-    do mode = MODE_ORDER[Math.floor(R() * MODE_ORDER.length)]; while (mode === lastMode);
+    const modes = DECOR.landscapes.filter((m) => MODE_ORDER.includes(m));
+    do mode = modes[Math.floor(R() * modes.length)]; while (mode === lastMode && modes.length > 1);
     lastMode = mode;
     const L = landscape(R, mode), cid = `city${i}`;
     const svg = `<svg id="${cid}" class="abs city" width="${L.W}" height="${L.H}" viewBox="0 0 ${L.W} ${L.H}" fill="none" stroke="${C.line}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">${L.parts
@@ -284,17 +287,17 @@ export function buildHtml(plan) {
     return svg;
   }).join('\n');
 
-  const fl = flocks(R, 4 + Math.floor(R() * 2));
+  const fl = DECOR.birds ? flocks(R, DECOR.birds[0] + Math.floor(R() * (DECOR.birds[1] - DECOR.birds[0] + 1))) : [];
   const birds = fl.map((f, fi) => f.map((b, bi) => `<svg class="abs bird" id="bd${fi}_${bi}" style="left:${b.x}px;top:${b.y}px" width="${r3(40 * b.s)}" height="${r3(16 * b.s)}" viewBox="0 0 40 16" fill="none" stroke="${C.line}" stroke-width="2.6" stroke-linecap="round"><path d="M2 12q8-10 18 0q10-10 18 0"/></svg>`).join('')).join('');
   fl.forEach((f, fi) => {
     const dx = (R() < .5 ? -1 : 1) * (60 + R() * 120);
     push(`tl.to("${f.map((_, bi) => `#bd${fi}_${bi}`).join(',')}",{x:${r3(dx)},y:${r3((R() - .5) * 60)},duration:${DUR},ease:"none"},0);`);
     f.forEach((_, bi) => push(`tl.to("#bd${fi}_${bi}",{scaleY:.35,duration:${r3(.28 + R() * .12)},yoyo:true,repeat:${Math.floor(DUR / .3)},ease:"sine.inOut"},${r3(R() * .4)});`));
   });
-  const sun = R() < .6 ? (() => { const sx = R() < .5 ? 150 : 930, sy = 190 + R() * 60; return `<svg class="abs" id="sun" style="left:${sx - 60}px;top:${r3(sy - 60)}px" width="120" height="120" viewBox="0 0 120 120" fill="none" stroke="${C.line}" stroke-width="2.6" stroke-linecap="round"><circle cx="60" cy="60" r="22"/>${[0, 45, 90, 135, 180, 225, 270, 315].map((a) => { const r = (a * Math.PI) / 180; return `<line x1="${r3(60 + Math.cos(r) * 32)}" y1="${r3(60 + Math.sin(r) * 32)}" x2="${r3(60 + Math.cos(r) * 44)}" y2="${r3(60 + Math.sin(r) * 44)}"/>`; }).join('')}</svg>`; })() : '';
+  const sun = R() < DECOR.sun ? (() => { const sx = R() < .5 ? 150 : 930, sy = 190 + R() * 60; return `<svg class="abs" id="sun" style="left:${sx - 60}px;top:${r3(sy - 60)}px" width="120" height="120" viewBox="0 0 120 120" fill="none" stroke="${C.line}" stroke-width="2.6" stroke-linecap="round"><circle cx="60" cy="60" r="22"/>${[0, 45, 90, 135, 180, 225, 270, 315].map((a) => { const r = (a * Math.PI) / 180; return `<line x1="${r3(60 + Math.cos(r) * 32)}" y1="${r3(60 + Math.sin(r) * 32)}" x2="${r3(60 + Math.cos(r) * 44)}" y2="${r3(60 + Math.sin(r) * 44)}"/>`; }).join('')}</svg>`; })() : '';
   if (sun) push(`tl.to("#sun",{rotation:40,duration:${DUR},ease:"none"},0);`);
-  const clouds = [0, 1].map((k) => { const cx = 120 + R() * 800, cy = 110 + k * 260 + R() * 60; return `<svg class="abs cloud" id="cl${k}" style="left:${r3(cx)}px;top:${r3(cy)}px" width="160" height="60" viewBox="0 0 160 60" fill="none" stroke="${C.line}" stroke-width="2.4" stroke-linecap="round" opacity=".7"><path d="M10 50h140M24 50a18 18 0 0 1 22-24a26 26 0 0 1 48-6a20 20 0 0 1 34 30"/></svg>`; }).join('');
-  push(`tl.to("#cl0",{x:${r3(80 + R() * 80)},duration:${DUR},ease:"none"},0);tl.to("#cl1",{x:${r3(-80 - R() * 80)},duration:${DUR},ease:"none"},0);`);
+  const clouds = [0, 1].slice(0, DECOR.clouds).map((k) => { const cx = 120 + R() * 800, cy = 110 + k * 260 + R() * 60; return `<svg class="abs cloud" id="cl${k}" style="left:${r3(cx)}px;top:${r3(cy)}px" width="160" height="60" viewBox="0 0 160 60" fill="none" stroke="${C.line}" stroke-width="2.4" stroke-linecap="round" opacity=".7"><path d="M10 50h140M24 50a18 18 0 0 1 22-24a26 26 0 0 1 48-6a20 20 0 0 1 34 30"/></svg>`; }).join('');
+  for (let k = 0; k < DECOR.clouds && k < 2; k++) push(`tl.to("#cl${k}",{x:${r3((k ? -1 : 1) * (80 + R() * 80))},duration:${DUR},ease:"none"},0);`);
 
   // ── сцены + переходы ───────────────────────────────────────────────────────
   const isWin = (s) => s && s.type === 'window';
@@ -343,7 +346,7 @@ export function buildHtml(plan) {
 
   const noise = `url("data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' seed='7'/><feColorMatrix values='0 0 0 0 .45  0 0 0 0 .38  0 0 0 0 .28  0 0 0 .22 0'/></filter><rect width='300' height='300' filter='url(#n)'/></svg>`)}")`;
 
-  const css = CSS
+  const css = styleCss(ST)
     .replace(/\$\{(\w+)\}/g, (m, k) => ({ W, H, noise, ...C })[k] ?? m);
 
   const page = `<!doctype html>

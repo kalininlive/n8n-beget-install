@@ -2,13 +2,20 @@
 // Вход: plan {scenes:[{type, w:[first,last], …}]}, words [{w,s,e}], duration (с).
 // Выход: {ok, errors[], warnings[], plan} — plan разрешён: scenes[].start/end/words, duration.
 // Мелочи чинятся с предупреждением (пропуски/наложения слов, неизвестная иконка, лишний пункт списка); ошибка — только то, что сломает кадр.
-import { COMPONENTS, ICONS } from './catalog.mjs';
+import { COMPONENTS, ICONS, allowed } from './catalog.mjs';
 
 const nWords = (s) => String(s || '').replace(/\*/g, '').split(/\s+/).filter(Boolean).length;
 
-export function validate(planIn, words, { duration } = {}) {
+export function validate(planIn, words, { duration, draft = false } = {}) {
   const errors = [], warnings = [];
   const plan = JSON.parse(JSON.stringify(planIn || {}));
+  // стиль и формат: неизвестный стиль → kraft; черновик — только с --draft (владелец ещё не утвердил)
+  plan.style = plan.style || 'kraft';
+  let al = allowed(plan.style, plan.format);
+  if (!al) { warnings.push(`стиль "${plan.style}" не найден — взят kraft`); plan.style = 'kraft'; al = allowed('kraft', plan.format); }
+  if (al.style.status !== 'approved' && !draft) errors.push(`стиль "${plan.style}" не утверждён (status: ${al.style.status}) — рендер только с --draft`);
+  if (plan.format && (!al.format || al.format.id !== plan.format)) warnings.push(`формат "${plan.format}" не найден — взят ${al.format?.id}`);
+  plan.format = al.format?.id;
   const SC = Array.isArray(plan.scenes) ? plan.scenes : [];
   if (!words.length) errors.push('нет слов речи (words пуст)');
   if (!SC.length) errors.push('в плане нет scenes');
@@ -32,7 +39,8 @@ export function validate(planIn, words, { duration } = {}) {
   // 2. типы и поля
   SC.forEach((sc, i) => {
     const at = `scenes[${i}] (${sc.type})`, spec = COMPONENTS[sc.type];
-    if (!spec) { errors.push(`${at}: неизвестный type, можно: ${Object.keys(COMPONENTS).join(', ')}`); return; }
+    if (!spec) { errors.push(`${at}: неизвестный type, можно: ${al.comps.join(', ')}`); return; }
+    if (!al.comps.includes(sc.type)) { errors.push(`${at}: сцена ${sc.type} не разрешена в стиле ${plan.style} / формате ${plan.format}, можно: ${al.comps.join(', ')}`); return; }
     for (const [f, d] of Object.entries(spec.fields)) {
       const v = sc[f];
       if (v == null || v === '' || (Array.isArray(v) && !v.length)) { if (d.required) errors.push(`${at}: нет поля ${f}`); continue; }
@@ -50,6 +58,7 @@ export function validate(planIn, words, { duration } = {}) {
     if (i && SC[i - 1].type === sc.type && sc.type !== 'window') errors.push(`${at}: два ${sc.type} подряд — чередуй сцены`);
     if (i > 1 && sc.type === 'window' && SC[i - 1].type === 'window' && SC[i - 2].type === 'window') errors.push(`${at}: больше 2 окон подряд`);
   });
+  if (al.format?.rules?.max_scenes && SC.length > al.format.rules.max_scenes) errors.push(`сцен ${SC.length}, в формате ${plan.format} не больше ${al.format.rules.max_scenes}`);
   const wins = SC.filter((s) => s.type === 'window').length;
   if (SC.length > 2 && wins > Math.ceil(SC.length / 2)) warnings.push(`окон ${wins} из ${SC.length} — больше половины, ролик станет однообразным`);
 

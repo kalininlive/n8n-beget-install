@@ -1,0 +1,23 @@
+{
+  "name": "Крафт · Ночь — тёмная бумага, мятный акцент",
+  "bg1": "#2B2824",
+  "bg2": "#24211E",
+  "bg3": "#1B1917",
+  "ink": "#F3EDE2",
+  "muted": "#B3AA9C",
+  "pale": "#6E665B",
+  "acc": "#2FA58B",
+  "line": "#6B604F",
+  "win": "#12110F",
+  "panel": "#1E1C19",
+  "green": "#5BD38A",
+  "cap": "#35312C",
+  "paper": "#3A3530",
+  "onDark": "#EDE6D6",
+  "mutedDark": "#A8A197",
+  "orbCore": "#CFFBEA",
+  "orbMid": "#6FD6B8",
+  "handle": "#8D8475",
+  "phText": "#8D8475",
+  "shadowRgb": "0,0,0"
+}
