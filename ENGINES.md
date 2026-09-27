@@ -144,6 +144,22 @@ docker exec -it n8n-media-render node /opt/engines/html-render/render.mjs --help
 
 ---
 
+## 3б. Крафт и голосовое → ролик — kraft-reel
+
+**Что это.** Стиль «Крафт» для МАСКОТ (ролик без персонажа: бумага, линейный город, окна-приложения) + чистка голосовых
+для режима 🎙 Голос в Маскоте и Крафте. Код: `engines/kraft-reel/` (README там же). Воркфлоу: `57 🟫 КРАФТ`, голосовая ветка в `55 МАСКОТ`.
+
+**Где лежит.** Не запечён в образ: том `/data/files/kraft-reel/engine/kraft-reel/`, браузер HyperFrames — `/data/files/hf-browser/`
+(Chrome for Testing 152.0.7977.30), шим `/opt/shims/kraft-reel`. Всё ставит `moy-n8n: npm run deploy:kraft-reel [-- --env .env.client-<имя>] [-- --test]`.
+Зависимости из образа/стека: `n8n-media-render` (node, ffmpeg, `hyperframes`, gsap), `faster-whisper` + шим `whisper` (для голоса).
+
+**Команды.** `kraft-reel catalog --md` (сцены для агента) · `validate plan.json words.json` · `render <jobDir> --out f.mp4` (jobDir: plan.json,
+words.json, voice.*) · `voice-cut <src> <cut.json> --out f.mp3` (куски речи + вырезание пауз по звуку, шумодав, −14 LUFS, новые тайминги слов).
+
+**Ресурсы.** Рендер 51 с ролика ≈ 3 мин 10 с на 4 CPU (HyperFrames, 3 воркера); чистка голосового 73 с → 2–3 с, whisper — около длительности записи.
+
+---
+
 ## 4. Проверка всех движков одной командой
 
 - На сервере: `bash /opt/n8n-install/install-extras.sh --check`
