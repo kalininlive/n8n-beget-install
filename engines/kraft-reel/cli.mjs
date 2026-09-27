@@ -26,6 +26,14 @@ import { voiceCut } from './voice.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const VERSION = JSON.parse(fs.readFileSync(path.join(HERE, 'package.json'), 'utf8')).version;
 const GSAP = process.env.KRAFT_GSAP || '/opt/engines/vendor/gsap/gsap.min.js';
+// браузер HyperFrames: env → /data/files/hf-browser (ставит deploy-kraft-reel) → старый путь пилота montage-v2
+function findBrowser() {
+  const cands = [process.env.HYPERFRAMES_BROWSER_PATH];
+  const root = '/data/files/hf-browser/chrome-headless-shell';
+  try { for (const v of fs.readdirSync(root).sort().reverse()) cands.push(path.join(root, v, 'chrome-headless-shell-linux64', 'chrome-headless-shell')); } catch { /* нет папки */ }
+  cands.push('/data/files/montage-v2-pilot/chrome-headless-shell/chrome-headless-shell-linux64/chrome-headless-shell');
+  return cands.find((f) => f && fs.existsSync(f)) || '';
+}
 
 const out = (o) => process.stdout.write(JSON.stringify(o) + '\n');
 const fail = (msg, extra = {}) => { out({ ok: false, error: msg, ...extra }); process.exit(1); };
@@ -51,7 +59,7 @@ function main() {
     process.stdout.write(fs.readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1).filter((l, i, a) => a.slice(0, i + 1).every((x) => x.startsWith('//'))).map((l) => l.replace(/^\/\/ ?/, '')).join('\n') + '\n');
     return;
   }
-  if (cmd === '--version') return out({ engine: 'kraft-reel', version: VERSION });
+  if (cmd === '--version') return out({ engine: 'kraft-reel', version: VERSION, browser: findBrowser() || null });
   if (cmd === 'catalog') return flag('--md') ? process.stdout.write(agentMd() + '\n') : out(agentSpec());
 
   if (cmd === 'validate') {
@@ -99,7 +107,7 @@ function main() {
     const outFile = path.resolve(opt('--out', path.join(job, 'kraft.mp4')));
     log(`HyperFrames: ${plan.scenes.length} сцен, ${plan.duration} с`);
     const r = spawnSync('hyperframes', ['render', '-o', outFile, '--no-low-memory-mode', '--workers', opt('--workers', process.env.KRAFT_WORKERS || '3')],
-      { cwd: wd, env: { ...process.env, HYPERFRAMES_NO_UPDATE_CHECK: '1' }, encoding: 'utf8', maxBuffer: 64 << 20 });
+      { cwd: wd, env: { ...process.env, HYPERFRAMES_NO_UPDATE_CHECK: '1', ...(findBrowser() ? { HYPERFRAMES_BROWSER_PATH: findBrowser() } : {}) }, encoding: 'utf8', maxBuffer: 64 << 20 });
     if (r.status !== 0 || !fs.existsSync(outFile)) fail('HyperFrames упал', { stderr: String(r.stderr || r.stdout).slice(-2000) });
     T.render = Date.now();
 

@@ -1,5 +1,4 @@
 #!/bin/sh
-# Крафт (МАСКОТ без маскота): kraft-reel catalog [--md] | validate <plan> <words> | render <jobDir> [--out f.mp4] [--cover f.jpg]
-# Пока движок не запечён в образ — запускается из тома /data/files/kraft-reel (выкатка: moy-n8n npm run deploy:kraft-reel)
-exec docker exec -i -e HYPERFRAMES_BROWSER_PATH=/data/files/montage-v2-pilot/chrome-headless-shell/chrome-headless-shell-linux64/chrome-headless-shell \
-  -e HYPERFRAMES_NO_UPDATE_CHECK=1 n8n-media-render node /data/files/kraft-reel/engine/kraft-reel/cli.mjs "$@"
+# Крафт (МАСКОТ/Крафт, голос): kraft-reel catalog [--md] | validate <plan> <words> | render <jobDir> [--out f.mp4] [--cover f.jpg] | voice-cut <src> <cut.json> --out f.mp3
+# Движок — в томе /data/files/kraft-reel (выкатка: moy-n8n npm run deploy:kraft-reel [-- --env .env.client-<имя>]); браузер он находит сам (/data/files/hf-browser)
+exec docker exec -i -e HYPERFRAMES_NO_UPDATE_CHECK=1 n8n-media-render node /data/files/kraft-reel/engine/kraft-reel/cli.mjs "$@"
