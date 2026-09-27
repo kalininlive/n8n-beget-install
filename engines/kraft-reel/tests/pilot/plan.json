@@ -1,0 +1,168 @@
+{
+ "handle": "@WEBSANSAY",
+ "scenes": [
+  {
+   "type": "hook_link",
+   "headline": "Этот *GENESIS* бот делает *бесконечные* рилсы",
+   "left": "doc",
+   "right": "spark",
+   "pills": [
+    "в любом стиле",
+    "без кредитов и доплат"
+   ],
+   "left_label": ".bot",
+   "w": [
+    0,
+    14
+   ]
+  },
+  {
+   "type": "title",
+   "eyebrow": "сейчас покажу",
+   "title": "КАК ЭТО РАБОТАЕТ",
+   "w": [
+    15,
+    19
+   ]
+  },
+  {
+   "type": "window",
+   "window": "GENESIS · reel.tsx",
+   "content": {
+    "kind": "code",
+    "lines": [
+     "<Reel style=\"любой\">",
+     "  <Hook text={идея} />",
+     "  <Scene kind=\"кейс\" />",
+     "  <Caption words={голос} />",
+     "</Reel>"
+    ],
+    "note": "собрано кодом · кадр за кадром",
+    "strike": "видео-нейросеть"
+   },
+   "w": [
+    20,
+    26
+   ]
+  },
+  {
+   "type": "thought",
+   "lead": "ты, наверное, думаешь",
+   "statement": "ролики будут так себе",
+   "reply": "совсем нет.",
+   "reply_steps": [
+    "нет.",
+    "совсем нет."
+   ],
+   "w": [
+    27,
+    36
+   ]
+  },
+  {
+   "type": "window",
+   "window": "Instagram · @websansay",
+   "content": {
+    "kind": "gallery",
+    "items": [
+     "#F4EEE3",
+     "#1F1D1B",
+     "#D97454",
+     "#6E9BC8",
+     "#EDE6D6"
+    ],
+    "connect": "Подключи GENESIS к Instagram",
+    "made_title": "GENESIS делает рилсы",
+    "made_label": "сделано в GENESIS",
+    "likes": "12,4K"
+   },
+   "w": [
+    37,
+    42
+   ]
+  },
+  {
+   "type": "question",
+   "lead": "следующая мысль",
+   "statement": "они не *залетят*",
+   "w": [
+    43,
+    47
+   ]
+  },
+  {
+   "type": "window",
+   "window": "GENESIS · твоя страница",
+   "content": {
+    "kind": "stats",
+    "stats": [
+     {
+      "label": "просмотры",
+      "value": 900000
+     },
+     {
+      "label": "переходы на сайт",
+      "value": 40000
+     }
+    ],
+    "chart": "трафик на сайт",
+    "trend": "растёт",
+    "badge": "возраст страницы: 2 месяца",
+    "axis": [
+     "40K",
+     "25K",
+     "10K",
+     "0"
+    ]
+   },
+   "w": [
+    48,
+    62
+   ]
+  },
+  {
+   "type": "window",
+   "window": "GENESIS · сравнение",
+   "content": {
+    "kind": "bars",
+    "bars": [
+     {
+      "label": "маркетинговое агентство",
+      "value": 0.28,
+      "note": "×1"
+     },
+     {
+      "label": "эта страница",
+      "value": 1.0,
+      "accent": true,
+      "note": "×3,5"
+     }
+    ]
+   },
+   "w": [
+    63,
+    69
+   ]
+  },
+  {
+   "type": "radial",
+   "headline": "меняет правила *продвижения*",
+   "w": [
+    70,
+    73
+   ]
+  },
+  {
+   "type": "cta",
+   "lead": "хочешь так же?",
+   "word": "СТАРТ",
+   "placeholder": "Добавить комментарий…",
+   "reply": "Отправили в директ: все детали",
+   "note": "бот пришлёт все детали",
+   "w": [
+    74,
+    85
+   ]
+  }
+ ]
+}
