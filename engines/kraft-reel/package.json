@@ -1,6 +1,6 @@
 {
   "name": "kraft-reel",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Стиль «Крафт» для МАСКОТ: ролик без спикера — голос + план агента → HyperFrames (бумага, линейный пейзаж, окна-приложения)",
   "type": "module",
   "private": true,

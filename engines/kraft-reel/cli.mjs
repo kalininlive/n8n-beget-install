@@ -7,6 +7,8 @@
 //       stdout {ok, errors[], warnings[], plan} — plan с посчитанными start/end. Код 1, если errors.
 //   kraft-reel render <jobDir> [--out file.mp4] [--cover file.jpg] [--workers 3] [--seed N] [--keep]
 //       jobDir: plan.json, words.json, voice.(mp3|m4a|ogg|wav|opus). stdout {ok, out, cover, duration, ms, warnings}; прогресс — в stderr.
+//   kraft-reel voice-cut <src> <cut.json> --out voice.mp3 [--b64]
+//       чистка голосового: оставить куски cut.segments, шумодав, −14 LUFS; stdout {ok, out, duration, words:[{word,start,end}], audio_base64?}
 //   kraft-reel --version
 //
 // words.json: [{w,s,e}] (с), edge-tts {words:[{word,start,end}]}, whisper verbose_json ({words|segments[].words}).
@@ -19,6 +21,7 @@ import { validate } from './validate.mjs';
 import { buildHtml } from './render.mjs';
 import { agentSpec, agentMd } from './catalog.mjs';
 import { hash } from './lib/city.mjs';
+import { voiceCut } from './voice.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const VERSION = JSON.parse(fs.readFileSync(path.join(HERE, 'package.json'), 'utf8')).version;
@@ -57,6 +60,17 @@ function main() {
     const r = validate(readJson(pf), loadWords(readJson(wf)), { duration: +opt('--duration', 0) || undefined });
     out(r);
     process.exit(r.ok ? 0 : 1);
+  }
+
+  if (cmd === 'voice-cut') {
+    const [, src, cf] = argv;
+    if (!src || !cf) fail('usage: voice-cut <src> <cut.json> --out voice.mp3 [--b64]');
+    const outFile = path.resolve(opt('--out', path.join(path.dirname(src), 'voice.mp3')));
+    try {
+      const r = voiceCut(src, readJson(cf), outFile);
+      if (flag('--b64')) r.audio_base64 = fs.readFileSync(outFile).toString('base64');
+      return out({ ok: true, ...r });
+    } catch (e) { fail('voice-cut: ' + String(e.stderr || e.message).slice(-600)); }
   }
 
   if (cmd === 'render') {
