@@ -25,3 +25,4 @@
 - install.sh спрашивает `TELEGRAM_API_ID/HASH` (локальный Bot API, файлы до 2 ГБ ставится всегда).
 - RSSHub убран из compose; Дзен-публикатор в сборку не входит (приватный репозиторий).
 - README переписан, добавлен VIDEO_STYLES.md (стили и путь монтажа, идея `/opt/montage`).
+- Убрана библиотека `engines/montage-v2/hyperframes/components` (≈240 HTML-заготовок, 12 МБ): движок её не использует, шаблоны и компоненты HyperFrames каждый ставит под себя.

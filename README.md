@@ -284,7 +284,7 @@ docker compose build n8n-media-render && docker compose up -d n8n-media-render
 ├── engines/
 │   ├── html-render/                   # HTML → PNG (карусели) + шрифты
 │   ├── kraft-reel/                    # Крафт + голос (styles/, skins/, formats/)
-│   └── montage-v2/                    # гибридный монтаж (styles/, hyperframes/components, sfx/, fonts/)
+│   └── montage-v2/                    # гибридный монтаж (styles/, sfx/, fonts/)
 ├── shims/                             # шимы вызова движков из n8n
 ├── beget/                             # набор GENESIS для серверов с шаблоном Beget (/opt/beget/n8n)
 ├── workflows/                         # mcarousel-genesis.json, sync-assets-s3.json
