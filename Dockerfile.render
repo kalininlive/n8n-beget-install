@@ -38,9 +38,11 @@ ENV CHROMIUM_PATH=/usr/bin/chromium
 ENV HYPERFRAMES_NO_UPDATE_CHECK=1
 
 # Движок маскота (Remotion CLI глобально; сам проект живёт в томе /data/studio-engine)
-# Версии = актуальные на 2026-11-16 (Remotion 4.0.544, HyperFrames 0.9.56). Откат: поменять ARG и пересобрать n8n-media-render. Проект studio-engine — той же мажорной серии Remotion.
+# Remotion 4.0.544 — актуальная на 2026-11-16; проект studio-engine — той же мажорной серии.
+# HyperFrames = ТА ЖЕ версия, что на компьютере владельца (стили собираются локально и должны рендериться на сервере 1:1).
+#   Локально запускать с той же версией: npx hyperframes@0.8.221 … ; обновлять — одновременно здесь и локально.
 ARG REMOTION_VERSION=4.0.544
-ARG HYPERFRAMES_VERSION=0.9.56
+ARG HYPERFRAMES_VERSION=0.8.221
 RUN npm install -g @remotion/cli@${REMOTION_VERSION} remotion@${REMOTION_VERSION} hyperframes@${HYPERFRAMES_VERSION}
 
 # GSAP по умолчанию: локально, без CDN (у контейнера интернет только через прокси, networkidle0 ждёт внешние скрипты)

@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 300" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="960" height="300" rx="16" fill="#0f172a"/>
+  <text x="32" y="44" fill="#e2e8f0" font-size="20" font-weight="700">Как получить api_id и api_hash для локального Bot API (2 минуты)</text>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L10 5L0 10z" fill="#38bdf8"/></marker>
+  </defs>
+  <g font-size="14" fill="#cbd5e1">
+    <!-- 1 -->
+    <rect x="32" y="72" width="200" height="196" rx="12" fill="#1e293b" stroke="#334155"/>
+    <circle cx="62" cy="102" r="16" fill="#38bdf8"/><text x="62" y="108" text-anchor="middle" fill="#0f172a" font-weight="700" font-size="16">1</text>
+    <text x="88" y="108" fill="#f8fafc" font-weight="700" font-size="16">Вход</text>
+    <rect x="48" y="128" width="168" height="30" rx="6" fill="#0f172a" stroke="#475569"/>
+    <text x="58" y="148" fill="#7dd3fc" font-family="Consolas, monospace" font-size="13">my.telegram.org</text>
+    <text x="48" y="186">Номер телефона →</text>
+    <text x="48" y="206">код придёт в сам</text>
+    <text x="48" y="226">Telegram (не SMS)</text>
+    <!-- 2 -->
+    <rect x="272" y="72" width="200" height="196" rx="12" fill="#1e293b" stroke="#334155"/>
+    <circle cx="302" cy="102" r="16" fill="#38bdf8"/><text x="302" y="108" text-anchor="middle" fill="#0f172a" font-weight="700" font-size="16">2</text>
+    <text x="328" y="108" fill="#f8fafc" font-weight="700" font-size="16">Раздел</text>
+    <rect x="288" y="128" width="168" height="30" rx="6" fill="#38bdf8" fill-opacity=".15" stroke="#38bdf8"/>
+    <text x="298" y="148" fill="#e0f2fe" font-size="13">API development tools</text>
+    <text x="288" y="186">Остальные пункты</text>
+    <text x="288" y="206">меню не нужны</text>
+    <!-- 3 -->
+    <rect x="512" y="72" width="200" height="196" rx="12" fill="#1e293b" stroke="#334155"/>
+    <circle cx="542" cy="102" r="16" fill="#38bdf8"/><text x="542" y="108" text-anchor="middle" fill="#0f172a" font-weight="700" font-size="16">3</text>
+    <text x="568" y="108" fill="#f8fafc" font-weight="700" font-size="16">Форма</text>
+    <text x="528" y="146" font-size="13">App title: <tspan fill="#7dd3fc">n8n-files</tspan></text>
+    <text x="528" y="168" font-size="13">Short name: <tspan fill="#7dd3fc">n8nfiles</tspan></text>
+    <text x="528" y="190" font-size="13">Platform: <tspan fill="#7dd3fc">Other</tspan></text>
+    <rect x="528" y="208" width="168" height="30" rx="6" fill="#22c55e"/>
+    <text x="612" y="228" text-anchor="middle" fill="#052e16" font-weight="700" font-size="13">Create application</text>
+    <!-- 4 -->
+    <rect x="752" y="72" width="176" height="196" rx="12" fill="#1e293b" stroke="#334155"/>
+    <circle cx="782" cy="102" r="16" fill="#38bdf8"/><text x="782" y="108" text-anchor="middle" fill="#0f172a" font-weight="700" font-size="16">4</text>
+    <text x="808" y="108" fill="#f8fafc" font-weight="700" font-size="16">Копируем</text>
+    <text x="768" y="146" font-size="13">App api_id</text>
+    <text x="768" y="166" fill="#fbbf24" font-family="Consolas, monospace" font-size="13">12345678</text>
+    <text x="768" y="196" font-size="13">App api_hash</text>
+    <text x="768" y="216" fill="#fbbf24" font-family="Consolas, monospace" font-size="12">0123abcd…(32)</text>
+    <text x="768" y="248" font-size="12" fill="#94a3b8">→ в установщик</text>
+  </g>
+  <g stroke="#38bdf8" stroke-width="2" marker-end="url(#a)">
+    <line x1="236" y1="170" x2="268" y2="170"/>
+    <line x1="476" y1="170" x2="508" y2="170"/>
+    <line x1="716" y1="170" x2="748" y2="170"/>
+  </g>
+</svg>

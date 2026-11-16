@@ -1,10 +1,88 @@
-# n8n-BEGET Install 🌌
+<div align="center">
 
-Production-стек n8n с видео-, карусельными и голосовыми движками, локальным распознаванием речи и Telegram-ботом — одной командой на чистый Ubuntu 22.04/24.04.
+# 🌌 n8n-BEGET Install
 
-Подробности: [STACK.md](STACK.md) (сервисы и правила сборки) · [ENGINES.md](ENGINES.md) (движки рендера) · [VIDEO_STYLES.md](VIDEO_STYLES.md) (стили и путь монтажа роликов) · [UPDATE_HISTORY.md](UPDATE_HISTORY.md).
+**Production-стек n8n с видео-, карусельными и голосовыми движками, локальным распознаванием речи и Telegram Bot API на 2 ГБ — одной командой на чистый Ubuntu 22.04 / 24.04.**
 
-> Ветки: `main` — универсальный установщик v4 (один `install.sh`), `stack-v2` — реальная боевая сборка сервера (compose-файлы, шимы, движки). Слияние `stack-v2` → `main` — решение владельца.
+![n8n](https://img.shields.io/badge/n8n-latest-EA4B71?logo=n8n&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+![Remotion](https://img.shields.io/badge/Remotion-4.0.544-0B84F3)
+![HyperFrames](https://img.shields.io/badge/HyperFrames-0.8.221-7C3AED)
+![GSAP](https://img.shields.io/badge/GSAP-3.15.1-88CE02?logo=greensock&logoColor=black)
+![ffmpeg](https://img.shields.io/badge/ffmpeg-libass-007808?logo=ffmpeg&logoColor=white)
+![Telegram](https://img.shields.io/badge/Telegram_Bot_API-2_GB-26A5E4?logo=telegram&logoColor=white)
+![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04%20%7C%2024.04-E95420?logo=ubuntu&logoColor=white)
+
+[Установка](#-установка) · [Ключи Telegram](#-ключи-telegram-bot-api-файлы-до-2-гб) · [Состав](#-что-входит-в-сборку) · [Стили роликов](VIDEO_STYLES.md) · [Сервисы](STACK.md) · [Движки](ENGINES.md) · [История](UPDATE_HISTORY.md)
+
+</div>
+
+> Ветки: `main` — старый универсальный установщик v4, `stack-v2` — актуальная боевая сборка (эта). Слияние `stack-v2` → `main` — решение владельца; до него ставим из `stack-v2`.
+
+---
+
+## ⚡ Установка
+
+```bash
+bash <(curl -s https://raw.githubusercontent.com/kalininlive/n8n-beget-install/stack-v2/install.sh)
+```
+
+<p align="center"><img src="docs/img/install-terminal.svg" alt="Диалог установщика" width="760"></p>
+
+Установщик задаёт вопросы в 4 шага: **домен и SSL** → **секреты n8n** (можно сгенерировать) → **Telegram** (бот + ключи Bot API) → **прокси** (можно пропустить). Дальше всё сам: Docker → клон репо в `/opt/n8n-install` → `.env` → `install-extras.sh` → `docker compose build && up -d` → cron → проверка.
+
+**Что подготовить заранее**
+
+| Что | Где взять | Обязательно |
+|---|---|---|
+| Сервер Ubuntu 22.04/24.04, root, от 4 ГБ RAM (8 ГБ — комфортно для рендера) | любой VPS | ✅ |
+| Домен, A-запись → IP сервера | панель регистратора | ✅ |
+| Токен бота | [@BotFather](https://t.me/BotFather) → `/newbot` | ✅ |
+| Ваш Telegram ID | [@userinfobot](https://t.me/userinfobot) | ✅ |
+| `api_id` + `api_hash` | [my.telegram.org](https://my.telegram.org) — см. ниже | желательно (иначе лимит 20 МБ) |
+| HTTP-прокси | ваш провайдер | нет |
+
+Без вопросов (CI / повторная установка) — задайте ответы переменными:
+
+```bash
+DOMAIN=n8n.example.com EMAIL=me@example.com TG_BOT_TOKEN=… TG_USER_ID=… \
+TELEGRAM_API_ID=… TELEGRAM_API_HASH=… bash install.sh
+```
+
+### 🔑 Ключи Telegram Bot API (файлы до 2 ГБ)
+
+**Зачем.** Обычный Bot API (`api.telegram.org`) отдаёт боту файлы только **до 20 МБ** и принимает на отправку **до 50 МБ** — видео для монтажа не пролезает. Сборка поднимает **собственный сервер Bot API** (`telegram-bot-api`) прямо на машине, и лимит становится **2 ГБ** в обе стороны. Чтобы такой сервер мог подключиться к Telegram, нужны ключи *приложения* (не бота) — `api_id` и `api_hash`.
+
+<p align="center"><img src="docs/img/telegram-api-keys.svg" alt="Как получить api_id и api_hash" width="900"></p>
+
+1. Откройте **[my.telegram.org](https://my.telegram.org)**, введите номер телефона — код придёт **в сам Telegram**, не по SMS.
+2. Выберите **API development tools**.
+3. Заполните форму: *App title* — любое (`n8n-files`), *Short name* — латиница 5–32 символа, *Platform* — `Other`. Нажмите **Create application**.
+4. Скопируйте **App api_id** (число) и **App api_hash** (32 символа) — установщик спросит их на шаге 3/4 и проверит формат.
+
+> 🔒 Ключи привязаны к вашему аккаунту: не публикуйте их и не передавайте. Хранятся только в `/opt/n8n-install/.env`.
+> Пропустили? Впишите `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` в `.env` и выполните `bash install-extras.sh`.
+
+**После установки** — в n8n в кредах Telegram укажите **Base URL: `http://telegram-bot-api-proxy`**. Большие файлы отправляйте с диска (`file:///data/…`), по URL Telegram берёт только до 20 МБ.
+
+---
+
+## 🗺️ Как устроено
+
+```mermaid
+flowchart LR
+  U([Пользователь в Telegram]) --> TBA[telegram-bot-api<br/>до 2 ГБ] --> P[telegram-bot-api-proxy]
+  Web([Браузер]) --> T[Traefik<br/>HTTPS]
+  T --> N[n8n-app]
+  P --> N
+  N <--> R[(Redis)] <--> W[n8n-worker]
+  N --> PG[(Postgres)]
+  W -- шимы /opt/shims --> MR[n8n-media-render<br/>Remotion · HyperFrames · GSAP<br/>ffmpeg · kraft-reel · montage-v2]
+  W --> TL[n8n-tools<br/>ffmpeg · yt-dlp · python]
+  W --> TTS[edge-tts] & WH[faster-whisper]
+  W --> AI[SearXNG · Sandbox]
+  MR & TL & W --- D[("общий том /data")]
+```
 
 ---
 
@@ -28,7 +106,7 @@ Production-стек n8n с видео-, карусельными и голосо
 | Библиотека / движок | Версия | Что делает |
 |---|---|---|
 | **Remotion** (`remotion`, `@remotion/cli`) | 4.0.544 | видео «маскот»: React-композиции 1080×1920 @ 60 fps |
-| **HyperFrames** | 0.9.56 (закреплена в `Dockerfile.render`; автообновление CLI отключено) | HTML → видео; сцены стилей Крафт и MONTAGE v2 |
+| **HyperFrames** | 0.8.221 — та же, что на компьютере владельца (закреплена в `Dockerfile.render`, автообновление CLI отключено; локально `npx hyperframes@0.8.221`) | HTML → видео; сцены стилей Крафт и MONTAGE v2 |
 | **GSAP** | 3.15.1 | анимации в HTML офлайн: `file:///opt/engines/vendor/gsap/gsap.min.js`, в Node — `require('gsap')` |
 | **puppeteer-core** | 25.17.0 | движок `html-render` (карусели HTML → PNG, 1080×1350 @2x) |
 | **fontkit** | 3.0.0 (в контейнере берётся из HyperFrames) | шрифты в MONTAGE v2 |
@@ -52,7 +130,7 @@ Production-стек n8n с видео-, карусельными и голосо
 | `telegram-bot-api-proxy` (nginx) | **Base URL кредов Telegram в n8n: `http://telegram-bot-api-proxy`**; отдаёт файлы по HTTP |
 | Админ-бот `n8n-bot` | управление сервером из Telegram, ежедневный бэкап в 02:00 |
 
-> **Лимит файлов.** Устанавливается всегда (установщик спрашивает `TELEGRAM_API_ID/HASH`). Bot API (локальный) принимает и отправляет файлы **до 2 ГБ**; для отправки 2 ГБ нужно слать файл с диска (`file:///data/…`), по URL — только до 20 МБ. Выше 2 ГБ (до 4 ГБ) Telegram позволяет только пользовательскому аккаунту Premium через MTProto (юзер-бот) — в сборку не входит.
+> **Лимит файлов.** Ставится по умолчанию (установщик спрашивает ключи — [как получить](#-ключи-telegram-bot-api-файлы-до-2-гб)). Bot API (локальный) принимает и отправляет файлы **до 2 ГБ**; для отправки 2 ГБ нужно слать файл с диска (`file:///data/…`), по URL — только до 20 МБ. Выше 2 ГБ (до 4 ГБ) Telegram позволяет только пользовательскому аккаунту Premium через MTProto (юзер-бот) — в сборку не входит.
 
 ### Поиск и AI-инструменты n8n
 
@@ -110,13 +188,7 @@ RSSHub и Дзен-публикатор (`kalininlive/dzen-factory`, прива�
 
 ---
 
-## ⚡ Установка
-
-```bash
-bash <(curl -s https://raw.githubusercontent.com/kalininlive/n8n-beget-install/main/install.sh)
-```
-
-Скрипт спросит: домен, email для SSL, пароль Postgres (или сгенерирует), токен и ID Telegram, `TELEGRAM_API_ID/HASH`, ключ шифрования (или сгенерирует), внешний прокси (можно пропустить). Дальше автоматически: Docker → клон репо в `/opt/n8n-install` → `.env` → `install-extras.sh` → `docker compose build && up -d` → cron → проверка.
+## 🔧 Повторный запуск и проверка
 
 Только «экстры» (движки, TTS, поиск, sandbox), идемпотентно:
 
@@ -169,6 +241,7 @@ docker compose build n8n-media-render && docker compose up -d n8n-media-render
 ├── shims/                             # шимы вызова движков из n8n
 ├── beget/                             # набор GENESIS для серверов с шаблоном Beget (/opt/beget/n8n)
 ├── workflows/                         # mcarousel-genesis.json, sync-assets-s3.json
+├── docs/img/                          # картинки README
 ├── edge-tts-custom/, telegram-bot-api/, searxng-settings.yml
 ├── bot/                               # админ-бот Telegram
 ├── scripts/                           # cleanup_data.sh, cron_backup.sh

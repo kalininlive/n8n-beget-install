@@ -5,12 +5,12 @@
 #   + движки: n8n-media-render (маскот/Remotion + html-render карусели),
 #     n8n-tools (ffmpeg/yt-dlp/python), edge-tts, SearXNG, n8n Sandbox
 # Состав стека — STACK.md, движки — ENGINES.md.
-# Запуск:  bash <(curl -s https://raw.githubusercontent.com/kalininlive/n8n-beget-install/main/install.sh)
+# Запуск:  bash <(curl -s https://raw.githubusercontent.com/kalininlive/n8n-beget-install/stack-v2/install.sh)
 # ============================================================
 set -euo pipefail
 
 REPO_URL="${REPO_URL:-https://github.com/kalininlive/n8n-beget-install.git}"
-REPO_BRANCH="${REPO_BRANCH:-main}"
+REPO_BRANCH="${REPO_BRANCH:-stack-v2}"   # после слияния stack-v2 -> main поменять на main
 INSTALL_DIR="/opt/n8n-install"
 
 
@@ -21,20 +21,82 @@ if (( EUID != 0 )); then
 fi
 
 clear
-echo "🌐 Автоматическая установка n8n + движков рендера"
-echo "------------------------------------------------"
+cat <<'BANNER'
+╔══════════════════════════════════════════════════════════════╗
+║   🌌  n8n + движки рендера — автоматическая установка         ║
+║   n8n · Postgres · Redis · Traefik · Remotion · HyperFrames   ║
+║   ffmpeg · edge-tts · whisper · Telegram Bot API (до 2 ГБ)    ║
+╚══════════════════════════════════════════════════════════════╝
+BANNER
+echo "Любой ответ можно задать заранее переменной окружения (DOMAIN=… EMAIL=… bash install.sh) — тогда вопрос пропускается."
+echo
+
+# ask VAR "вопрос" — спрашивает, только если переменная ещё не задана в окружении
+ask() {
+  local var="$1" prompt="$2"
+  if [ -n "${!var:-}" ]; then echo "   ↳ $var задан из окружения"; return; fi
+  read -r -p "$prompt" "$var" </dev/tty || true
+  printf -v "$var" '%s' "${!var:-}"
+}
+section() { echo; echo "━━━ $1 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; }
 
 ### 1. Ввод переменных
-read -p "🌐 Введите домен для n8n (например: n8n.example.com): " DOMAIN
-read -p "📧 Введите email для SSL-сертификата Let's Encrypt: " EMAIL
-read -p "🔐 Введите пароль для базы данных Postgres (Enter для генерации): " POSTGRES_PASSWORD
-read -p "🤖 Введите Telegram Bot Token: " TG_BOT_TOKEN
-read -p "👤 Введите Telegram User ID (для уведомлений): " TG_USER_ID
-read -p "🗝️  Введите ключ шифрования для n8n (Enter для генерации): " N8N_ENCRYPTION_KEY
-echo "📎 Локальный Telegram Bot API (файлы до 2 ГБ): ключи с https://my.telegram.org → API development tools"
-read -p "🔑 TELEGRAM_API_ID: " TELEGRAM_API_ID
-read -p "🔑 TELEGRAM_API_HASH: " TELEGRAM_API_HASH
-read -p "🌍 Внешний HTTP-прокси для n8n (например http://user:pass@host:port, Enter — без прокси): " PROXY_URL
+section "1/4  Домен и SSL"
+echo "DNS-запись A домена должна уже указывать на IP этого сервера — иначе Let's Encrypt не выдаст сертификат."
+ask DOMAIN "🌐 Домен для n8n (например n8n.example.com): "
+ask EMAIL  "📧 Email для SSL-сертификата Let's Encrypt: "
+
+section "2/4  Секреты n8n"
+ask POSTGRES_PASSWORD  "🔐 Пароль Postgres (Enter — сгенерировать): "
+ask N8N_ENCRYPTION_KEY "🗝️  Ключ шифрования n8n (Enter — сгенерировать; при переносе со старого сервера — вставьте старый): "
+
+section "3/4  Telegram"
+cat <<'TGHELP'
+🤖 Админ-бот сервера (/status, /logs, /backups, /update, ночной бэкап):
+   • токен — у @BotFather: /newbot → скопируйте строку вида 123456:ABC-DEF…
+   • ваш ID — напишите @userinfobot, он ответит числом (только этот ID сможет управлять ботом)
+TGHELP
+ask TG_BOT_TOKEN "🤖 Telegram Bot Token: "
+ask TG_USER_ID   "👤 Ваш Telegram User ID: "
+
+cat <<'APIHELP'
+
+📎 Локальный Telegram Bot API — зачем он нужен
+   Обычный Bot API (api.telegram.org) даёт ботам скачать файл максимум 20 МБ
+   и отправить — 50 МБ. Видео для монтажа больше. Свой сервер Bot API на этой
+   машине снимает лимит до 2 ГБ в обе стороны. Для него Telegram требует ключи
+   приложения (не бота!) — api_id и api_hash.
+
+   Где взять (2 минуты, бесплатно):
+     1. Откройте https://my.telegram.org и войдите по номеру телефона
+        (код придёт в сам Telegram, не по SMS).
+     2. Раздел «API development tools».
+     3. Заполните форму: App title — любое (например n8n-files),
+        Short name — латиницей 5–32 символа, Platform — Other. «Create application».
+     4. Скопируйте App api_id (число) и App api_hash (32 символа).
+   Ключи привязаны к вашему аккаунту — никому их не передавайте.
+   Enter без ввода — пропустить (бот будет работать с лимитом 20 МБ; ключи можно
+   добавить позже в .env и запустить bash install-extras.sh).
+APIHELP
+while :; do
+  ask TELEGRAM_API_ID "🔑 App api_id: "
+  [ -z "$TELEGRAM_API_ID" ] || [[ "$TELEGRAM_API_ID" =~ ^[0-9]+$ ]] && break
+  echo "   ⚠️  api_id — это только цифры. Попробуйте ещё раз."; TELEGRAM_API_ID=""
+done
+if [ -n "$TELEGRAM_API_ID" ]; then
+  while :; do
+    ask TELEGRAM_API_HASH "🔑 App api_hash: "
+    [[ "$TELEGRAM_API_HASH" =~ ^[0-9a-fA-F]{32}$ ]] && break
+    echo "   ⚠️  api_hash — 32 символа 0-9/a-f. Попробуйте ещё раз."; TELEGRAM_API_HASH=""
+  done
+else
+  TELEGRAM_API_HASH=""
+  echo "   ↳ Локальный Bot API пропущен (лимит файлов 20 МБ)."
+fi
+
+section "4/4  Сеть"
+echo "Нужен, если серверу закрыт доступ к OpenAI/Google и т.п. Внутренние сервисы ходят мимо прокси автоматически."
+ask PROXY_URL "🌍 HTTP-прокси (http://user:pass@host:port, Enter — без прокси): "
 
 [ -z "$DOMAIN" ] && { echo "❌ Домен обязателен"; exit 1; }
 [ -z "$EMAIL" ] && { echo "❌ Email обязателен"; exit 1; }

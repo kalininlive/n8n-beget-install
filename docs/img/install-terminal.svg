@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 430" font-family="Consolas, 'DejaVu Sans Mono', monospace" font-size="14">
+  <rect width="860" height="430" rx="12" fill="#0b1020"/>
+  <rect width="860" height="34" rx="12" fill="#1e293b"/><rect y="22" width="860" height="12" fill="#1e293b"/>
+  <circle cx="22" cy="17" r="6" fill="#ef4444"/><circle cx="42" cy="17" r="6" fill="#f59e0b"/><circle cx="62" cy="17" r="6" fill="#22c55e"/>
+  <text x="430" y="22" text-anchor="middle" fill="#94a3b8" font-family="Segoe UI, Arial, sans-serif" font-size="13">root@server: ~</text>
+  <g fill="#cbd5e1">
+    <text x="20" y="62"><tspan fill="#22c55e">#</tspan> bash &lt;(curl -s …/n8n-beget-install/stack-v2/install.sh)</text>
+    <text x="20" y="92" fill="#7dd3fc">━━━ 1/4  Домен и SSL ━━━━━━━━━━━━━━━━━━━━━━━━━━</text>
+    <text x="20" y="114">🌐 Домен для n8n: <tspan fill="#fbbf24">n8n.example.com</tspan></text>
+    <text x="20" y="136">📧 Email для SSL: <tspan fill="#fbbf24">me@example.com</tspan></text>
+    <text x="20" y="166" fill="#7dd3fc">━━━ 2/4  Секреты n8n ━━━━━━━━━━━━━━━━━━━━━━━━━━</text>
+    <text x="20" y="188">🔐 Пароль Postgres (Enter — сгенерировать): <tspan fill="#64748b">⏎</tspan></text>
+    <text x="20" y="218" fill="#7dd3fc">━━━ 3/4  Telegram ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</text>
+    <text x="20" y="240">🤖 Telegram Bot Token: <tspan fill="#fbbf24">123456:ABC-DEF…</tspan></text>
+    <text x="20" y="262">👤 Ваш Telegram User ID: <tspan fill="#fbbf24">987654321</tspan></text>
+    <text x="20" y="284" fill="#94a3b8">📎 Локальный Telegram Bot API — файлы до 2 ГБ (подсказка, где взять ключи)</text>
+    <text x="20" y="306">🔑 App api_id: <tspan fill="#fbbf24">12345678</tspan></text>
+    <text x="20" y="328">🔑 App api_hash: <tspan fill="#fbbf24">0123abcd…</tspan></text>
+    <text x="20" y="358" fill="#7dd3fc">━━━ 4/4  Сеть ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</text>
+    <text x="20" y="380">🌍 HTTP-прокси (Enter — без прокси): <tspan fill="#64748b">⏎</tspan></text>
+    <text x="20" y="410" fill="#22c55e">✅ Docker → образы → движки → cron → проверка … готово: https://n8n.example.com</text>
+  </g>
+</svg>
