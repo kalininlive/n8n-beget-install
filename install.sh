@@ -195,7 +195,7 @@ echo "  Bot API 2 ГБ: $([ -n "$TELEGRAM_API_ID" ] && echo да || echo нет)
 echo "  Прокси:       ${PROXY_URL:-нет}"
 echo "  Ветка:        $REPO_BRANCH → $INSTALL_DIR"
 if [ "$HAVE_TTY" = 1 ] && [ "${FORCE:-0}" != 1 ]; then
-  confirm "Начать установку (15–30 минут)?" || die "Отменено."
+  confirm "Начать установку (10–15 минут)?" || die "Отменено."
 fi
 
 ### 2. Система: пакеты, swap, firewall, Docker
@@ -270,9 +270,14 @@ chmod +x shims/* backup_n8n.sh update_n8n.sh install-extras.sh scripts/*.sh
 ### 6. Подготовка движков: секреты sandbox/searxng, NO_PROXY, движки монтажа, шрифты
 bash ./install-extras.sh --prepare-only
 
-### 7. Сборка и запуск ядра
-section "Сборка образов (10–20 минут при первой установке)"
-docker compose build
+### 7. Сборка и запуск ядра (готовый образ рендера качается параллельно)
+section "Сборка ядра + загрузка образа рендера (5–10 минут)"
+PULL_PID=""
+if [ "${MEDIA_RENDER_BUILD:-0}" != "1" ]; then
+  docker compose pull -q n8n-media-render >/dev/null 2>&1 &
+  PULL_PID=$!
+fi
+docker compose build n8n n8n-worker n8n-tools n8n-bot
 docker compose up -d n8n-postgres n8n-redis n8n-traefik n8n n8n-worker n8n-bot n8n-tools
 echo "⏳ Жду запуска n8n (до 2 минут)..."
 for i in $(seq 1 24); do
@@ -282,6 +287,7 @@ done
 
 ### 8. Движки и сервисы (Bot API, whisper, edge-tts, рендер, поиск, sandbox) + полная проверка
 section "Движки и проверка"
+[ -n "$PULL_PID" ] && { echo "⏳ Дожидаюсь загрузки образа рендера..."; wait "$PULL_PID" || true; }
 CHECK_OK=1
 bash ./install-extras.sh || CHECK_OK=0
 

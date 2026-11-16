@@ -9,7 +9,7 @@
 #             fonts/fonts.json           (семейство, категория, начертания — для агентов/воркфлоу)
 #
 #   В контейнерах: /opt/fonts (n8n, n8n-worker, n8n-media-render, n8n-tools)
-#   + /usr/share/fonts/n8n в media-render и tools → видят fontconfig, Chromium, ffmpeg/libass.
+#   + fontconfig (media-render: /opt/fonts, tools: /usr/share/fonts/n8n) → Chromium, ffmpeg/libass видят по имени.
 #
 # Источник — github.com/google/fonts (sparse-клон: качаются только нужные папки).
 # Запуск: bash scripts/install-fonts.sh   (идемпотентно; повторный запуск обновит шрифты)

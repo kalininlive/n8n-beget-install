@@ -77,23 +77,36 @@ prepare_files() {
   echo "17 * * * * root /bin/bash $BASE_DIR/scripts/cleanup_data.sh >> $BASE_DIR/logs/cleanup.log 2>&1" > /etc/cron.d/n8n-data-cleanup
   chmod 644 /etc/cron.d/n8n-data-cleanup
   [ -f searxng-settings.yml ] || printf 'use_default_settings: true\nsearch:\n  formats:\n    - html\n    - json\n' > searxng-settings.yml
-  # коллекция шрифтов /opt/fonts (fonts/fonts.list → fonts/google); качаем, если ещё нет или список новее каталога
-  mkdir -p fonts/custom
-  if [ ! -f fonts/fonts.json ] || [ fonts/fonts.list -nt fonts/fonts.json ]; then
-    bash scripts/install-fonts.sh || log "  ⚠ шрифты не скачались (сеть?) — повторить: bash scripts/install-fonts.sh"
-  else
-    log "  коллекция шрифтов уже есть ($(grep -o '"family"' fonts/fonts.json | wc -l) семейств)"
-  fi
+  mkdir -p fonts/custom   # коллекция шрифтов ставится из образа media-render (см. ensure_fonts)
 }
 
-# Браузер HyperFrames (Chrome for Testing headless-shell) → /data/files/hf-browser; путь = HYPERFRAMES_BROWSER_PATH в docker-compose.override.yml
-HF_CHROME="152.0.7977.30"
-install_hf_browser() {
-  if ls data/files/hf-browser/chrome-headless-shell/linux-${HF_CHROME}/chrome-headless-shell-linux64/chrome-headless-shell >/dev/null 2>&1; then
-    log "  браузер HyperFrames: есть (${HF_CHROME})"; return 0
+# Образ n8n-media-render: готовый с GitHub (ghcr.io), иначе — локальная сборка из Dockerfile.render.
+# Браузер HyperFrames, Playwright, шрифты уже внутри — на сервере ничего не докачивается.
+ensure_media_image() {
+  local img; img=$(docker compose config --images 2>/dev/null | grep media-render)
+  if [ "${MEDIA_RENDER_BUILD:-0}" != "1" ]; then
+    log "  образ n8n-media-render: скачиваю готовый ($img, ~3 ГБ)"
+    docker compose pull -q n8n-media-render >/dev/null 2>&1 || true
+    if docker image inspect "$img" >/dev/null 2>&1; then log "  образ n8n-media-render: готов"; return 0; fi
+    log "  ⚠ не скачался — собираю локально"
   fi
-  log "  браузер HyperFrames: скачиваю chrome-headless-shell ${HF_CHROME} (~100 МБ)"
-  docker exec n8n-media-render npx -y @puppeteer/browsers install "chrome-headless-shell@${HF_CHROME}" --path /data/files/hf-browser 2>&1 | tail -n 2     || log "  ⚠ не скачался — повторить: bash install-extras.sh (нужен доступ к storage.googleapis.com / PROXY_URL)"
+  log "  образ n8n-media-render: сборка из Dockerfile.render (15–25 минут)..."
+  docker compose build n8n-media-render
+}
+
+# Коллекция шрифтов /opt/n8n-install/fonts: копия из образа (тот же fonts.list) или скачивание по своему fonts.list
+ensure_fonts() {
+  if [ -f fonts/fonts.json ] && [ ! fonts/fonts.list -nt fonts/fonts.json ]; then
+    log "  шрифты: есть ($(grep -o '"family"' fonts/fonts.json | wc -l) семейств)"; return 0
+  fi
+  local img; img=$(docker compose config --images 2>/dev/null | grep media-render)
+  if docker run --rm --entrypoint cat "$img" /opt/fonts/fonts.list 2>/dev/null | cmp -s - fonts/fonts.list; then
+    rm -rf fonts/google
+    docker run --rm --entrypoint tar "$img" -C /opt/fonts -cf - google fonts.css fonts.json | tar -xf - -C fonts \
+      && touch fonts/fonts.json && log "  шрифты: из образа ($(grep -o '"family"' fonts/fonts.json | wc -l) семейств)" && return 0
+  fi
+  log "  шрифты: fonts.list изменён — скачиваю по списку"
+  bash scripts/install-fonts.sh || log "  ⚠ шрифты не скачались (сеть?) — повторить: bash scripts/install-fonts.sh"
 }
 
 # ---------- 3. Запуск сервисов ----------
@@ -109,13 +122,11 @@ start_services() {
     log "  ⚠ TELEGRAM_API_ID/HASH пустые — telegram-bot-api не запускаю (вписать в .env и повторить install-extras.sh)"
   fi
   whisper_model
-  if ! docker image inspect n8n-install-n8n-media-render:latest >/dev/null 2>&1; then
-    log "  сборка образа n8n-media-render (5-10 минут)..."
-    docker compose build n8n-media-render
-  fi
+  ensure_media_image
+  ensure_fonts
   docker compose up -d n8n-media-render
   docker exec n8n-media-render fc-cache -f >/dev/null 2>&1 && log "  fc-cache: шрифты /opt/fonts проиндексированы" || true
-  install_hf_browser
+  docker exec n8n-tools fc-cache -f >/dev/null 2>&1 || true
   if [ "${NO_PROXY_CHANGED:-0}" = "1" ]; then
     log "  NO_PROXY изменился — пересоздаю n8n и n8n-worker"
     docker compose up -d n8n n8n-worker
@@ -168,8 +179,8 @@ check_all() {
   chk "gsap + three.js"     docker exec n8n-media-render node --no-deprecation -e "const t=require('three');require('gsap');require('fs').accessSync('/opt/engines/vendor/three/build/three.module.min.js');console.log('three r'+t.REVISION+', gsap OK')"
   chk "hyperframes (шим)"   sh -c './shims/hyperframes --version 2>&1 | tail -n 1'
   chk "playwright"          sh -c './shims/playwright --version && ./shims/pw-python -c "from playwright.sync_api import sync_playwright as p; b=p().start().chromium.launch(); print(\"python + chromium OK\"); b.close()"'
-  chk "браузер HyperFrames" sh -c "ls data/files/hf-browser/chrome-headless-shell/linux-${HF_CHROME}/chrome-headless-shell-linux64/chrome-headless-shell"
-  chk "коллекция шрифтов"   sh -c 'docker exec n8n-media-render sh -c "fc-list | grep -c /usr/share/fonts/n8n/" && docker exec n8n-app test -f /opt/fonts/fonts.json && echo "/opt/fonts в n8n"'
+  chk "браузер HyperFrames" docker exec n8n-media-render sh -c 'test -x "$HYPERFRAMES_BROWSER_PATH" && echo "$HYPERFRAMES_BROWSER_PATH"'
+  chk "коллекция шрифтов"   sh -c 'docker exec n8n-media-render sh -c "fc-list | grep -c /opt/fonts/" && docker exec n8n-app test -f /opt/fonts/fonts.json && echo "/opt/fonts в n8n"'
   # реальный рендер HTML → PNG через Playwright (браузер + шрифт из /opt/fonts)
   mkdir -p data/files
   cat > data/files/_selftest.html <<'HTML'

@@ -7,6 +7,12 @@ backups
 logs
 letsencrypt
 bot/node_modules
+# шрифты образ качает сам по fonts/fonts.list
+fonts/google
+fonts/.src
+fonts/custom
+fonts/fonts.css
+fonts/fonts.json
 *.bak*
 *.save
 *.log

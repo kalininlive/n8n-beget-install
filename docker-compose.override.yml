@@ -49,6 +49,8 @@ services:
       - telegram-bot-data:/var/lib/telegram-bot-api:ro
       - ./telegram-bot-api/nginx.conf:/etc/nginx/conf.d/default.conf:ro
   n8n-media-render:
+    # готовый образ с GitHub (install скачивает его); при недоступности — собирается локально из Dockerfile.render
+    image: ${MEDIA_RENDER_IMAGE:-ghcr.io/kalininlive/n8n-media-render:stack-v2}
     build:
       context: .
       dockerfile: Dockerfile.render
@@ -56,14 +58,12 @@ services:
     restart: always
     volumes:
     - /opt/n8n-install/data:/data
-    - /opt/n8n-install/fonts:/opt/fonts:ro
-    - /opt/n8n-install/fonts:/usr/share/fonts/n8n:ro   # fontconfig → Chromium, HyperFrames, Remotion, ffmpeg/libass видят шрифты по имени
+    - /opt/n8n-install/fonts:/opt/fonts:ro   # поверх копии из образа (+ ваши fonts/custom); fontconfig смотрит в /opt/fonts
     environment:
     - HTTP_PROXY=${PROXY_URL}
     - HTTPS_PROXY=${PROXY_URL}
     - NO_PROXY=${NO_PROXY}
     - HYPERFRAMES_NO_UPDATE_CHECK=1
-    - HYPERFRAMES_BROWSER_PATH=/data/files/hf-browser/chrome-headless-shell/linux-152.0.7977.30/chrome-headless-shell-linux64/chrome-headless-shell
   sandbox-certs:
     image: ghcr.io/n8n-io/n8n-sandbox-service-api:1.2.0
     container_name: sandbox-certs

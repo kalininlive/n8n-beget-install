@@ -1,10 +1,21 @@
-# Образ n8n-media-render: движки рендера для n8n (см. ENGINES.md / STACK.md)
+# Образ n8n-media-render: всё для рендера и браузерной автоматизации из n8n (см. ENGINES.md / STACK.md)
 #   - remotion / @remotion/cli / hyperframes  → видео из React / HTML (проекты — в томе /data)
 #   - playwright (Node + Python)              → браузерная автоматизация, скриншоты HTML
-#   - gsap (глобально + /opt/engines/vendor/gsap) → анимации в HTML/HyperFrames без CDN
-# Chromium системный (/usr/bin/chromium), ни один пакет браузер не скачивает.
-# Пересборка: docker compose build n8n-media-render && docker compose up -d n8n-media-render
+#   - gsap, three.js (/opt/engines/vendor)    → анимации и 3D в HTML без CDN
+#   - коллекция шрифтов /opt/fonts (62 семейства с кириллицей), браузер HyperFrames — запечены
+# Готовый образ: ghcr.io/kalininlive/n8n-media-render:stack-v2 (собирает GitHub Actions, .github/workflows/media-render.yml)
+# Своя сборка: docker compose build n8n-media-render && docker compose up -d n8n-media-render
 
+# ---------- этап 1: шрифты (sparse-клон google/fonts по fonts/fonts.list) ----------
+FROM debian:bookworm-slim AS fonts
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+COPY fonts/fonts.list /build/fonts/fonts.list
+COPY scripts/install-fonts.sh /build/scripts/install-fonts.sh
+RUN BASE_DIR=/build bash /build/scripts/install-fonts.sh \
+    && test -s /build/fonts/fonts.json && rm -rf /build/fonts/custom
+
+# ---------- этап 2: образ ----------
 FROM node:22-bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -14,7 +25,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     python3-venv \
     fontconfig \
-    fonts-inter \
     fonts-noto \
     fonts-noto-color-emoji \
     fonts-dejavu \
@@ -25,21 +35,28 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     procps \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Google Rubik font
-RUN mkdir -p /usr/share/fonts/truetype/rubik && \
-    curl -sL "https://github.com/google/fonts/raw/main/ofl/rubik/Rubik%5Bwght%5D.ttf" -o /usr/share/fonts/truetype/rubik/Rubik-VariableFont_wght.ttf && \
-    fc-cache -f -v
+# Шрифты: в образе копия коллекции; на сервере поверх монтируется /opt/n8n-install/fonts (там же custom/).
+# fontconfig смотрит в /opt/fonts → Chromium, HyperFrames, Remotion, ffmpeg/libass видят шрифты по имени.
+COPY --from=fonts /build/fonts /opt/fonts
+RUN printf '<?xml version="1.0"?>\n<!DOCTYPE fontconfig SYSTEM "fonts.dtd">\n<fontconfig><dir>/opt/fonts</dir></fontconfig>\n' \
+      > /etc/fonts/conf.d/99-opt-fonts.conf \
+    && fc-cache -f && fc-list | grep -c /opt/fonts/
 
 ENV CHROMIUM_PATH=/usr/bin/chromium
 # HyperFrames сам делает `npm i -g hyperframes@latest` при запуске CLI — версия должна задаваться только здесь (2026-09-26: так уехал 0.8.30 → 0.8.78)
 ENV HYPERFRAMES_NO_UPDATE_CHECK=1
 
 # Remotion CLI глобально; свои проекты Remotion кладутся в том /data.
-# Remotion 4.0.544 — актуальная на 2026-11-16.
 # HyperFrames закреплён: проекты, собранные локально на той же версии (npx hyperframes@0.8.221), рендерятся на сервере 1:1.
 ARG REMOTION_VERSION=4.0.544
 ARG HYPERFRAMES_VERSION=0.8.221
 RUN npm install -g @remotion/cli@${REMOTION_VERSION} remotion@${REMOTION_VERSION} hyperframes@${HYPERFRAMES_VERSION}
+
+# Браузер HyperFrames (Chrome for Testing headless-shell) — в образе, ничего не качается на сервере.
+ARG HF_CHROME=152.0.7977.30
+RUN npx -y @puppeteer/browsers install "chrome-headless-shell@${HF_CHROME}" --path /opt/hf-browser \
+    && test -x /opt/hf-browser/chrome-headless-shell/linux-${HF_CHROME}/chrome-headless-shell-linux64/chrome-headless-shell
+ENV HYPERFRAMES_BROWSER_PATH=/opt/hf-browser/chrome-headless-shell/linux-${HF_CHROME}/chrome-headless-shell-linux64/chrome-headless-shell
 
 # GSAP по умолчанию: локально, без CDN (у контейнера интернет только через прокси, networkidle0 ждёт внешние скрипты)
 #   HTML (hyperframes, playwright): <script src="file:///opt/engines/vendor/gsap/gsap.min.js"></script> (+ плагины из той же папки)
@@ -63,14 +80,14 @@ ENV NODE_PATH=/usr/local/lib/node_modules
 # Playwright (Node + Python) со своими браузерами Chromium — для парсинга, скриншотов, автоматизации сайтов.
 #   Node:   require('playwright') (через NODE_PATH), CLI `playwright`; шимы pw-node / playwright
 #   Python: from playwright.sync_api import sync_playwright; шим pw-python
-#   Браузеры в образе: /ms-playwright (Chromium + headless shell, ~300 МБ). Обновлять обе версии вместе.
+#   Браузеры в образе: /ms-playwright. Обновлять обе версии вместе.
 ARG PLAYWRIGHT_VERSION=1.65.1
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 RUN npm install -g playwright@${PLAYWRIGHT_VERSION} \
     && playwright install --with-deps chromium \
     && pip3 install --no-cache-dir --break-system-packages playwright==${PLAYWRIGHT_VERSION} \
     && python3 -m playwright install chromium \
-    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /var/lib/apt/lists/* /root/.npm \
     && playwright --version && python3 -c "import playwright"
 
 WORKDIR /data
