@@ -85,7 +85,6 @@ prepare_files() {
     cp -f engines/html-render/fonts/*.woff2 engines/html-render/fonts/fonts.css data/studio-engine/public/fonts/
     log "  шрифты: $(ls engines/html-render/fonts/*.woff2 | wc -l) woff2 + fonts.css → data/studio-engine/public/fonts/"
   fi
-  install_engines
   # коллекция шрифтов /opt/fonts (fonts/fonts.list → fonts/google); качаем, если ещё нет или список новее каталога
   mkdir -p fonts/custom
   if [ ! -f fonts/fonts.json ] || [ fonts/fonts.list -nt fonts/fonts.json ]; then
@@ -95,24 +94,7 @@ prepare_files() {
   fi
 }
 
-# Движки монтажа kraft-reel и montage-v2 живут в томе /data/files/<имя>/engine/<имя> (не в образе).
-# Копируем из репо; прежняя версия → engine.prev (откат: cp -a engine.prev/<имя> engine/).
-install_engines() {
-  local e dst
-  for e in kraft-reel montage-v2; do
-    [ -d "engines/$e" ] || continue
-    dst="data/files/$e/engine"
-    mkdir -p "$dst"
-    if [ -d "$dst/$e" ]; then
-      if diff -rq "engines/$e" "$dst/$e" >/dev/null 2>&1; then log "  движок $e: актуален"; continue; fi
-      rm -rf "data/files/$e/engine.prev"; mkdir -p "data/files/$e/engine.prev"; cp -a "$dst/$e" "data/files/$e/engine.prev/"
-    fi
-    rm -rf "$dst/$e"; cp -a "engines/$e" "$dst/$e"
-    log "  движок $e $(grep -m1 '"version"' "engines/$e/package.json" | grep -o '[0-9][0-9.]*') → $dst/$e"
-  done
-}
-
-# Браузер HyperFrames (Chrome for Testing headless-shell) → /data/files/hf-browser; версия = в шиме montage-v2
+# Браузер HyperFrames (Chrome for Testing headless-shell) → /data/files/hf-browser; путь = HYPERFRAMES_BROWSER_PATH в docker-compose.override.yml
 HF_CHROME="152.0.7977.30"
 install_hf_browser() {
   if ls data/files/hf-browser/chrome-headless-shell/linux-${HF_CHROME}/chrome-headless-shell-linux64/chrome-headless-shell >/dev/null 2>&1; then
@@ -192,8 +174,8 @@ check_all() {
   chk "шимы внутри n8n-app" docker exec n8n-app sh -c 'ls /opt/shims/render-html /opt/shims/remotion /opt/shims/edge-tts /opt/shims/whisper'
   chk "NO_PROXY в n8n-app"  docker exec n8n-app sh -c 'echo "$NO_PROXY" | grep -q faster-whisper && echo "$NO_PROXY" | grep -q telegram-bot-api && echo "$NO_PROXY" | grep -q edge-tts && echo "$NO_PROXY" | grep -q searxng && echo "$NO_PROXY" | grep -q sandbox-api && echo "$NO_PROXY"'
   chk "уборка (cron)"       sh -c 'test -f /etc/cron.d/n8n-data-cleanup && bash scripts/cleanup_data.sh | tail -n 1'
-  chk "kraft-reel (шим)"    sh -c './shims/kraft-reel --version 2>&1 | head -n 1'
-  chk "montage-v2 (шим)"    sh -c './shims/montage-v2 catalog 2>&1 | head -c 120; echo'
+  chk "hyperframes (шим)"   sh -c './shims/hyperframes --version 2>&1 | tail -n 1'
+  chk "playwright"          sh -c './shims/playwright --version && ./shims/pw-python -c "from playwright.sync_api import sync_playwright as p; b=p().start().chromium.launch(); print(\"python + chromium OK\"); b.close()"'
   chk "браузер HyperFrames" sh -c "ls data/files/hf-browser/chrome-headless-shell/linux-${HF_CHROME}/chrome-headless-shell-linux64/chrome-headless-shell"
   chk "коллекция шрифтов"   sh -c 'docker exec n8n-media-render sh -c "fc-list | grep -c /usr/share/fonts/n8n/" && docker exec n8n-app test -f /opt/fonts/fonts.json && echo "/opt/fonts в n8n"'
   chk "шрифты каруселей"    sh -c 'test -f data/studio-engine/public/fonts/fonts.css && ls data/studio-engine/public/fonts/*.woff2 | wc -l'

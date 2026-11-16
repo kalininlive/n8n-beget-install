@@ -26,3 +26,5 @@
 - RSSHub убран из compose; Дзен-публикатор в сборку не входит (приватный репозиторий).
 - README переписан, добавлен VIDEO_STYLES.md (стили и путь монтажа, идея `/opt/montage`).
 - Убрана библиотека `engines/montage-v2/hyperframes/components` (≈240 HTML-заготовок, 12 МБ): движок её не использует, шаблоны и компоненты HyperFrames каждый ставит под себя.
+- Из установщика убраны движки монтажа kraft-reel и montage-v2 (с audio-prep, стилями, звуками) и VIDEO_STYLES.md: стили роликов каждый ставит под себя. `n8n-media-render` больше не запускает audio-prep, путь браузера HyperFrames задан в compose (`HYPERFRAMES_BROWSER_PATH`).
+- Playwright 1.65.1 (Node + Python) с Chromium в `n8n-media-render`; шимы `playwright`, `pw-node`, `pw-python`; проверка в `install-extras.sh --check`.

@@ -1,5 +1,8 @@
 # ENGINES.md — движки рендера на сервере n8n
 
+> **2026-11-16:** движки монтажа kraft-reel и montage-v2 (и audio-prep) из установщика убраны — это индивидуальная настройка каждого. Разделы о них ниже — история.
+
+
 > С 27.09.2026 воркфлоу GENESIS перенумерованы (55/56/57 → 19/20/21, 1 START → 3 START и т. д.) — таблица `genesis-n8n/docs/workflow-numbering.md`.
 
 > Оба движка живут в одном контейнере **`n8n-media-render`** (`docker-compose.override.yml` → `Dockerfile.render`).

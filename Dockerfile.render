@@ -55,6 +55,19 @@ RUN npm install -g gsap@${GSAP_VERSION} \
     && test -f /opt/engines/vendor/gsap/gsap.min.js
 ENV NODE_PATH=/usr/local/lib/node_modules
 
+# Playwright (Node + Python) со своими браузерами Chromium — для парсинга, скриншотов, автоматизации сайтов.
+#   Node:   require('playwright') (через NODE_PATH), CLI `playwright`; шимы pw-node / playwright
+#   Python: from playwright.sync_api import sync_playwright; шим pw-python
+#   Браузеры в образе: /ms-playwright (Chromium + headless shell, ~300 МБ). Обновлять обе версии вместе.
+ARG PLAYWRIGHT_VERSION=1.65.1
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN npm install -g playwright@${PLAYWRIGHT_VERSION} \
+    && playwright install --with-deps chromium \
+    && pip3 install --no-cache-dir --break-system-packages playwright==${PLAYWRIGHT_VERSION} \
+    && python3 -m playwright install chromium \
+    && rm -rf /var/lib/apt/lists/* \
+    && playwright --version && python3 -c "import playwright"
+
 # Движок html-render (карусели): версионируется вместе с этим Dockerfile
 COPY engines/html-render /opt/engines/html-render
 RUN cd /opt/engines/html-render && npm ci --omit=dev && node render.mjs --version

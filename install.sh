@@ -3,7 +3,7 @@
 # n8n-beget-install — полный боевой стек n8n одной командой
 #   Ubuntu 24.04 LTS (рекомендуется) · 22.04 LTS · 26.04 LTS, x86_64
 #   n8n (queue mode) + Postgres + Redis + Traefik (HTTPS) + админ-бот Telegram
-#   + движки: n8n-media-render (Remotion, HyperFrames, GSAP, ffmpeg, kraft-reel, montage-v2, html-render)
+#   + движки: n8n-media-render (Remotion, HyperFrames, GSAP, Playwright, ffmpeg, html-render)
 #     n8n-tools (ffmpeg/yt-dlp/python), edge-tts, faster-whisper, SearXNG, n8n Sandbox,
 #     локальный Telegram Bot API (файлы до 2 ГБ), коллекция шрифтов /opt/fonts
 #

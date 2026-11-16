@@ -54,9 +54,6 @@ services:
       dockerfile: Dockerfile.render
     container_name: n8n-media-render
     restart: always
-    command: ["node", "--use-env-proxy", "/data/files/montage-v2/engine/montage-v2/audio-prep-service.mjs"]
-    expose:
-    - "3387"
     volumes:
     - /opt/n8n-install/data:/data
     - /opt/n8n-install/data/studio-engine:/data/studio-engine
@@ -69,6 +66,7 @@ services:
     - PIXABAY_API_KEY=${PIXABAY_API_KEY}
     - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
     - HYPERFRAMES_NO_UPDATE_CHECK=1
+    - HYPERFRAMES_BROWSER_PATH=/data/files/hf-browser/chrome-headless-shell/linux-152.0.7977.30/chrome-headless-shell-linux64/chrome-headless-shell
   sandbox-certs:
     image: ghcr.io/n8n-io/n8n-sandbox-service-api:1.2.0
     container_name: sandbox-certs

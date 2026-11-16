@@ -13,7 +13,7 @@
 ![Telegram](https://img.shields.io/badge/Telegram_Bot_API-2_GB-26A5E4?logo=telegram&logoColor=white)
 ![Ubuntu](https://img.shields.io/badge/Ubuntu-24.04_LTS_(22.04%20%7C%2026.04)-E95420?logo=ubuntu&logoColor=white)
 
-[Установка](#-установка) · [Через агента](#-установка-через-ии-агента) · [Ключи Telegram](#-ключи-telegram-bot-api-файлы-до-2-гб) · [Состав](#-что-входит-в-сборку) · [Стили роликов](VIDEO_STYLES.md) · [Сервисы](STACK.md) · [Движки](ENGINES.md) · [История](UPDATE_HISTORY.md)
+[Установка](#-установка) · [Через агента](#-установка-через-ии-агента) · [Ключи Telegram](#-ключи-telegram-bot-api-файлы-до-2-гб) · [Состав](#-что-входит-в-сборку) · [Сервисы](STACK.md) · [Движки](ENGINES.md) · [История](UPDATE_HISTORY.md)
 
 </div>
 
@@ -121,7 +121,7 @@ flowchart LR
   P --> N
   N <--> R[(Redis)] <--> W[n8n-worker]
   N --> PG[(Postgres)]
-  W -- шимы /opt/shims --> MR[n8n-media-render<br/>Remotion · HyperFrames · GSAP<br/>ffmpeg · kraft-reel · montage-v2]
+  W -- шимы /opt/shims --> MR[n8n-media-render<br/>Remotion · HyperFrames · GSAP<br/>Playwright · ffmpeg]
   W --> TL[n8n-tools<br/>ffmpeg · yt-dlp · python]
   W --> TTS[edge-tts] & WH[faster-whisper]
   W --> AI[SearXNG · Sandbox]
@@ -150,13 +150,13 @@ flowchart LR
 | Библиотека / движок | Версия | Что делает |
 |---|---|---|
 | **Remotion** (`remotion`, `@remotion/cli`) | 4.0.544 | видео «маскот»: React-композиции 1080×1920 @ 60 fps |
-| **HyperFrames** | 0.8.221 — та же, что на компьютере владельца (закреплена в `Dockerfile.render`, автообновление CLI отключено; локально `npx hyperframes@0.8.221`) | HTML → видео; сцены стилей Крафт и MONTAGE v2 |
+| **HyperFrames** | 0.8.221 — та же, что на компьютере владельца (закреплена в `Dockerfile.render`, автообновление CLI отключено; локально `npx hyperframes@0.8.221`) | HTML → видео (свои шаблоны и компоненты ставятся отдельно, под себя) |
 | **GSAP** | 3.15.1 | анимации в HTML офлайн: `file:///opt/engines/vendor/gsap/gsap.min.js`, в Node — `require('gsap')` |
 | **puppeteer-core** | 25.17.0 | движок `html-render` (карусели HTML → PNG, 1080×1350 @2x) |
-| **fontkit** | 3.0.0 (в контейнере берётся из HyperFrames) | шрифты в MONTAGE v2 |
 | ffmpeg + libass, ffprobe | системные | нарезка, склейка, субтитры, нормализация звука |
-| **kraft-reel** | 0.4.0 | стиль «Крафт» + чистка голосовых (`voice-cut`) |
-| **montage-v2** | 0.5.4 | гибридный монтаж: говорящая голова + графика, 17 стилей, EDL-нарезка пауз, QA-инспектор |
+| **Playwright** (Node + Python) | 1.65.1, свой Chromium в `/ms-playwright` | парсинг, скриншоты, автоматизация сайтов: шимы `playwright`, `pw-node`, `pw-python` |
+
+> Движки монтажа (стили роликов, шаблоны и компоненты HyperFrames) в сборку не входят: это индивидуальная настройка, каждый ставит свои в том `/data`.
 
 ### 🔤 Шрифты
 
@@ -168,7 +168,6 @@ flowchart LR
 |---|---|---|
 | `edge-tts` | `travisvn/openai-edge-tts` + наш патч (`edge-tts-custom/`) | бесплатная озвучка + пословные таймкоды (`/v1/audio/speech-with-timestamps`) |
 | `faster-whisper` | `ghcr.io/speaches-ai/speaches:0.8.3-cpu` | распознавание речи вместо AssemblyAI; модель — `WHISPER_MODEL` (small / medium / large-v3-turbo); шим `whisper` |
-| `audio-prep` (внутри `n8n-media-render`, порт 3387) | `engines/montage-v2/audio-prep-service.mjs` | чистка голоса (Auphonic Free при подтверждённом бесплатном аккаунте, иначе локальный ffmpeg) |
 
 ### Telegram
 
@@ -197,21 +196,6 @@ flowchart LR
 - `scripts/cleanup_data.sh` — cron ежечасно: файлы Bot API (24 ч), `/data/tg-send` (3 ч), `/data/reels` и `/data/carousel/jobs` (24 ч), `/data/genesis` (3 дня); шим `cleanup-genesis-job` — точечная уборка папки задачи.
 - `backup_n8n.sh` + cron 02:00: все workflows и credentials → zip → Telegram (< 50 МБ) или `backups/`.
 - `update_n8n.sh`: бэкап → новая версия n8n → пересборка → post-check движков → алерт в Telegram.
-
----
-
-## 🎬 Стили и путь монтажа роликов
-
-Все стили живут в репо данными/кодом движков и выбираются из меню Telegram-бота. Полная карта — [VIDEO_STYLES.md](VIDEO_STYLES.md). Коротко:
-
-| Путь | Что | Стили |
-|---|---|---|
-| `engines/kraft-reel/` | ролик без персонажа: бумага, линейный город, окна-приложения; режимы Ручной / Авто / Голос | `kraft` (утверждён), `kraft-night` (черновик) |
-| `engines/montage-v2/` | видео спикера → whisper → агент-режиссёр (JSON-план) → validate → render | 17 стилей, формат `expert` |
-| studio-engine (Remotion, том `/data/studio-engine`) | маскот-ролики 1080×1920 @ 60 fps | `MascotFactoryReel` |
-| `engines/html-render/` | карусели HTML → PNG | 4 стиля карусели (шаблоны вшиты в воркфлоу `mcarousel`) |
-
-Как добавлять цвет / декор / формат / стиль / сцену — [engines/kraft-reel/STYLES.md](engines/kraft-reel/STYLES.md) и [engines/montage-v2/STYLES.md](engines/montage-v2/STYLES.md).
 
 ---
 
@@ -256,7 +240,7 @@ bash install-extras.sh --check                         # только прове
 4. **Шим = одна строка** `exec docker exec -i <container> <cmd> "$@"` в `shims/`, `chmod +x`.
 5. **Секреты только в `.env`** (шаблон `.env.template`); в compose — `${...}`.
 
-Шимы: `ffmpeg`, `ffprobe`, `yt-dlp`, `python`, `python3`, `fc-scan`, `edge-tts`, `whisper`, `remotion`, `hyperframes`, `render-html`, `render-studio-reel`, `kraft-reel`, `montage-v2`, `cleanup-genesis-job`.
+Шимы: `ffmpeg`, `ffprobe`, `yt-dlp`, `python`, `python3`, `fc-scan`, `edge-tts`, `whisper`, `remotion`, `hyperframes`, `playwright`, `pw-node`, `pw-python`, `render-html`, `render-studio-reel`, `cleanup-genesis-job`.
 
 ---
 
@@ -282,9 +266,7 @@ docker compose build n8n-media-render && docker compose up -d n8n-media-render
 ├── docker-compose.override.yml        # движки и доп. сервисы
 ├── Dockerfile.n8n / .render / .tools  # образы
 ├── engines/
-│   ├── html-render/                   # HTML → PNG (карусели) + шрифты
-│   ├── kraft-reel/                    # Крафт + голос (styles/, skins/, formats/)
-│   └── montage-v2/                    # гибридный монтаж (styles/, sfx/, fonts/)
+│   └── html-render/                   # HTML → PNG (карусели) + шрифты
 ├── shims/                             # шимы вызова движков из n8n
 ├── beget/                             # набор GENESIS для серверов с шаблоном Beget (/opt/beget/n8n)
 ├── workflows/                         # mcarousel-genesis.json, sync-assets-s3.json
@@ -296,5 +278,5 @@ docker compose build n8n-media-render && docker compose up -d n8n-media-render
 ├── update_n8n.sh, backup_n8n.sh
 ├── .env.template  →  .env             # секреты, не в git
 ├── data/                              # /data во всех контейнерах (reels/, carousel/jobs/, studio-engine/, files/, genesis/)
-└── STACK.md, ENGINES.md, VIDEO_STYLES.md, UPDATE_HISTORY.md
+└── STACK.md, ENGINES.md, UPDATE_HISTORY.md
 ```

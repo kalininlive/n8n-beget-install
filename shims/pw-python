@@ -1,0 +1,3 @@
+#!/bin/sh
+# Python со скриптами Playwright: pw-python /data/files/script.py
+exec docker exec -i n8n-media-render python3 "$@"
