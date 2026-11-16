@@ -1,6 +1,6 @@
 #!/bin/sh
 # whisper <файл в /data> [язык ru|en|…] [модель] → JSON (verbose_json) с текстом, сегментами и пословными таймкодами.
-# Пример из n8n Execute Command: whisper /data/genesis/123_456/video.mp4 ru
+# Пример из n8n Execute Command: whisper /data/files/video.mp4 ru
 # Файл — в /data (общий том) или путь из getFile локального Bot API (/var/lib/telegram-bot-api/...). Без языка — автоопределение. Модель по умолчанию — WHISPER_MODEL из .env.
 if [ -z "$1" ] || [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
   echo "usage: whisper <file in /data> [language] [model]"; exit 0

@@ -32,9 +32,10 @@ node /opt/engines/html-render/render.mjs /data/carousel/jobs/<runId>
 ## Шрифты и ассеты
 
 - Шрифты каруселей: `fonts/*.woff2` + `fonts/fonts.css` (Inter 400–900, Manrope 700/800, Montserrat 400/700/900, Rubik 700–900, Unbounded 700–900; cyrillic+latin).
-  На сервере они копируются в `/data/studio-engine/public/fonts/` — общую папку шрифтов с маскотом — и подключаются в HTML так:
-  `<link rel="stylesheet" href="file:///data/studio-engine/public/fonts/fonts.css">`.
-- Персонаж, стикеры, иконки — те же, что у маскота: `file:///data/studio-engine/public/assets/{characters,stickers,icons,emojis,brand_logos}/…`.
+  Запечены в образ `n8n-media-render` (`/opt/engines/html-render/fonts/`) и подключаются в HTML так:
+  `<link rel="stylesheet" href="file:///opt/engines/html-render/fonts/fonts.css">`.
+  Плюс вся коллекция `/opt/fonts` доступна по имени семейства.
+- Свои картинки (персонажи, иконки, логотипы) кладите в общий том и подключайте как `file:///data/files/…`.
 - Шаблоны/стили каруселей на сервере не хранятся — они живут в Code-нодах воркфлоу n8n.
 
 ## Как n8n готовит задачу
@@ -64,5 +65,4 @@ PUPPETEER_EXECUTABLE_PATH="C:/Program Files/Google/Chrome/Application/chrome.exe
 
 ## Обновление
 
-Изменить `render.mjs` / `package.json` в репо → `docker compose build n8n-media-render && docker compose up -d n8n-media-render`
-(из `moy-n8n`: `npm run deploy:html-render`). Другие сервисы не трогаются.
+Изменить `render.mjs` / `package.json` в репо → `docker compose build n8n-media-render && docker compose up -d n8n-media-render` Другие сервисы не трогаются.

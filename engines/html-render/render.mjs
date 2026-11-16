@@ -4,8 +4,7 @@
 // Вход:  папка задачи с файлами slide_01.html … slide_NN.html (любые *.html).
 // Выход: рядом (или в --out) slide_01.png … slide_NN.png + JSON-отчёт в stdout.
 //
-// Эталон поведения — D:/CLAUDE CODE/carusel_dayly_agent/build.mjs: один Chromium
-// на всю задачу, viewport 1080x1350 @ 2x, ожидание load + networkidle0 + document.fonts.ready.
+// Один Chromium на всю задачу, viewport 1080x1350 @ 2x, ожидание load + networkidle0 + document.fonts.ready.
 //
 // Запуск из n8n через шим:  /opt/shims/render-html /data/carousel/jobs/<runId> [опции]
 // Запуск внутри контейнера: node /opt/engines/html-render/render.mjs <jobDir> [опции]

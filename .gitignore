@@ -25,7 +25,7 @@ node_modules/
 bot/node_modules/
 engines/*/node_modules/
 
-# локальные копии документации сервера (источник — moy-n8n)
+# локальные копии документации сервера
 SERVER_PROFILE.md
 
 # коллекция шрифтов: качается scripts/install-fonts.sh, свои шрифты — в fonts/custom

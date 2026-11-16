@@ -149,8 +149,8 @@ flowchart LR
 
 | Библиотека / движок | Версия | Что делает |
 |---|---|---|
-| **Remotion** (`remotion`, `@remotion/cli`) | 4.0.544 | видео «маскот»: React-композиции 1080×1920 @ 60 fps |
-| **HyperFrames** | 0.8.221 — та же, что на компьютере владельца (закреплена в `Dockerfile.render`, автообновление CLI отключено; локально `npx hyperframes@0.8.221`) | HTML → видео (свои шаблоны и компоненты ставятся отдельно, под себя) |
+| **Remotion** (`remotion`, `@remotion/cli`) | 4.0.544 | видео из React-композиций (свои проекты — в томе `/data`) |
+| **HyperFrames** | 0.8.221 (закреплена в `Dockerfile.render`, автообновление CLI отключено; локально `npx hyperframes@0.8.221`) | HTML → видео (свои шаблоны и компоненты ставятся отдельно, под себя) |
 | **GSAP** | 3.15.1 | анимации в HTML офлайн: `file:///opt/engines/vendor/gsap/gsap.min.js`, в Node — `require('gsap')` |
 | **puppeteer-core** | 25.17.0 | движок `html-render` (карусели HTML → PNG, 1080×1350 @2x) |
 | ffmpeg + libass, ffprobe | системные | нарезка, склейка, субтитры, нормализация звука |
@@ -193,19 +193,9 @@ flowchart LR
 
 ### Уборка и бэкапы
 
-- `scripts/cleanup_data.sh` — cron ежечасно: файлы Bot API (24 ч), `/data/tg-send` (3 ч), `/data/reels` и `/data/carousel/jobs` (24 ч), `/data/genesis` (3 дня); шим `cleanup-genesis-job` — точечная уборка папки задачи.
+- `scripts/cleanup_data.sh` — cron ежечасно: файлы Bot API (24 ч), `/data/tg-send` (3 ч), `/data/reels` и `/data/carousel/jobs` (24 ч).
 - `backup_n8n.sh` + cron 02:00: все workflows и credentials → zip → Telegram (< 50 МБ) или `backups/`.
 - `update_n8n.sh`: бэкап → новая версия n8n → пересборка → post-check движков → алерт в Telegram.
-
----
-
-## 🔌 Интеграции вне установщика
-
-| Что | Где |
-|---|---|
-| **GENESIS** (Telegram-бот контент-завода, ~50 воркфлоу) | репо `genesis-n8n`, ставится `moy-n8n: npm run client:genesis`; использует все движки выше |
-
-RSSHub и Дзен-публикатор (`kalininlive/dzen-factory`, приватный репозиторий) в сборку не входят; RSSHub не используется.
 
 ---
 
@@ -213,9 +203,8 @@ RSSHub и Дзен-публикатор (`kalininlive/dzen-factory`, прива�
 
 | Нет | Статус |
 |---|---|
-| Дзен-публикатор | отдельный приватный репозиторий `dzen-factory`, ставится вручную (его `deploy.sh`) |
 | Юзер-бот Telegram для файлов 2–4 ГБ | не входит: Bot API ограничен 2 ГБ, больше — только аккаунт Premium через MTProto (Telethon/GramJS) |
-| studio-engine (проект маскота, ≈1 ГБ) | вне git: Remotion установлен, но сам проект персонажа кладётся в `data/studio-engine` отдельно (STACK.md §5); остальные движки работают без него |
+| Воркфлоу, стили роликов, шаблоны HyperFrames, проекты Remotion | индивидуальная настройка: каждый ставит свои поверх готового стека |
 
 ---
 
@@ -240,7 +229,7 @@ bash install-extras.sh --check                         # только прове
 4. **Шим = одна строка** `exec docker exec -i <container> <cmd> "$@"` в `shims/`, `chmod +x`.
 5. **Секреты только в `.env`** (шаблон `.env.template`); в compose — `${...}`.
 
-Шимы: `ffmpeg`, `ffprobe`, `yt-dlp`, `python`, `python3`, `fc-scan`, `edge-tts`, `whisper`, `remotion`, `hyperframes`, `playwright`, `pw-node`, `pw-python`, `render-html`, `render-studio-reel`, `cleanup-genesis-job`.
+Шимы: `ffmpeg`, `ffprobe`, `yt-dlp`, `python`, `python3`, `fc-scan`, `edge-tts`, `whisper`, `remotion`, `hyperframes`, `playwright`, `pw-node`, `pw-python`, `render-html`.
 
 ---
 
@@ -252,8 +241,6 @@ bash update_n8n.sh        # build --pull, тег :latest остаётся
 # только движки (n8n не трогается)
 docker compose build n8n-media-render && docker compose up -d n8n-media-render
 ```
-
-Управление с ПК (аудит, бэкап, deploy движков, `npm run doctor`) — проект `moy-n8n`.
 
 ---
 
@@ -268,8 +255,6 @@ docker compose build n8n-media-render && docker compose up -d n8n-media-render
 ├── engines/
 │   └── html-render/                   # HTML → PNG (карусели) + шрифты
 ├── shims/                             # шимы вызова движков из n8n
-├── beget/                             # набор GENESIS для серверов с шаблоном Beget (/opt/beget/n8n)
-├── workflows/                         # mcarousel-genesis.json, sync-assets-s3.json
 ├── docs/img/                          # картинки README
 ├── fonts/                             # коллекция шрифтов → /opt/fonts (fonts.list в git, файлы качает scripts/install-fonts.sh)
 ├── edge-tts-custom/, telegram-bot-api/, searxng-settings.yml
@@ -277,6 +262,6 @@ docker compose build n8n-media-render && docker compose up -d n8n-media-render
 ├── scripts/                           # cleanup_data.sh, cron_backup.sh
 ├── update_n8n.sh, backup_n8n.sh
 ├── .env.template  →  .env             # секреты, не в git
-├── data/                              # /data во всех контейнерах (reels/, carousel/jobs/, studio-engine/, files/, genesis/)
+├── data/                              # /data во всех контейнерах (reels/, carousel/jobs/, files/, tg-send/)
 └── STACK.md, ENGINES.md, UPDATE_HISTORY.md
 ```

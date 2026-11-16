@@ -259,7 +259,7 @@ chmod 600 .env bot/.env
 
 ### 5. Папки, права, шимы
 mkdir -p logs backups letsencrypt traefik_dynamic docker-plugins \
-  data/reels data/carousel/jobs data/files data/studio-engine/public/fonts data/studio-engine/public/assets
+  data/reels data/carousel/jobs data/files
 touch logs/backup.log
 chown -R 1000:1000 logs backups
 chmod -R 755 logs backups

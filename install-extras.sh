@@ -7,8 +7,7 @@
 #   bash install-extras.sh --prepare-only  # только .env / папки / шрифты / шимы (без docker)
 #   bash install-extras.sh --check         # только проверка (для doctor / после обновления)
 #
-# Делает то же, что раньше делали deploy-sandbox.mjs / deploy-searxng.mjs / deploy-edge-tts.mjs
-# из moy-n8n, плюс html-render. Сервисы описаны в docker-compose.override.yml (репо), сюда
+# Сервисы описаны в docker-compose.override.yml (репо), сюда
 # ничего не хардкодим — только секреты в .env, NO_PROXY, папки, шрифты и запуск.
 # ============================================================
 set -euo pipefail
@@ -34,7 +33,7 @@ ensure_env_var() { # ensure_env_var KEY VALUE — добавить, если к�
 
 prepare_env() {
   [ -f .env ] || { echo "❌ Нет $BASE_DIR/.env — сначала install.sh"; exit 1; }
-  log "1/4 .env: секреты sandbox / searxng / pixabay"
+  log "1/4 .env: секреты sandbox / searxng"
   local sbx reg rnk
   sbx="sbx_$(openssl rand -hex 24)"; reg="reg_$(openssl rand -hex 24)"; rnk="rnk_$(openssl rand -hex 24)"
   # парные значения должны совпадать (см. SERVER_PROFILE / lessons learned)
@@ -47,7 +46,6 @@ prepare_env() {
   ensure_env_var N8N_SANDBOX_SERVICE_URL "http://sandbox-api:8080"
   ensure_env_var SEARXNG_SECRET "$(openssl rand -hex 32)"
   ensure_env_var N8N_INSTANCE_AI_SEARXNG_URL "http://searxng:8080"
-  grep -q '^PIXABAY_API_KEY=' .env || echo "PIXABAY_API_KEY=" >> .env
   grep -q '^PROXY_URL=' .env || echo "PROXY_URL=" >> .env
   grep -q '^TELEGRAM_API_ID=' .env || echo "TELEGRAM_API_ID=" >> .env
   grep -q '^TELEGRAM_API_HASH=' .env || echo "TELEGRAM_API_HASH=" >> .env
@@ -68,23 +66,17 @@ prepare_env() {
   chmod 600 .env
 }
 
-# ---------- 2. Папки, шимы, шрифты ----------
+# ---------- 2. Папки, шимы ----------
 prepare_files() {
-  log "2/4 папки /data, шимы, шрифты каруселей"
-  mkdir -p data/reels data/carousel/jobs data/files \
-    data/studio-engine/public/fonts data/studio-engine/public/assets/characters data/studio-engine/public/assets/stickers
+  log "2/4 папки /data, шимы"
+  mkdir -p data/reels data/carousel/jobs data/files
   chmod +x shims/* 2>/dev/null || true
   mkdir -p data/tg-send logs
-  # ежечасная уборка временных файлов (боты, отправка, рендеры, задачи GENESIS) — см. scripts/cleanup_data.sh
+  # ежечасная уборка временных файлов (боты, отправка, рендеры) — см. scripts/cleanup_data.sh
   chmod +x scripts/cleanup_data.sh 2>/dev/null || true
   echo "17 * * * * root /bin/bash $BASE_DIR/scripts/cleanup_data.sh >> $BASE_DIR/logs/cleanup.log 2>&1" > /etc/cron.d/n8n-data-cleanup
   chmod 644 /etc/cron.d/n8n-data-cleanup
   [ -f searxng-settings.yml ] || printf 'use_default_settings: true\nsearch:\n  formats:\n    - html\n    - json\n' > searxng-settings.yml
-  # шрифты html-render → общая папка шрифтов с маскотом (источник правды — engines/html-render/fonts в репо)
-  if [ -d engines/html-render/fonts ]; then
-    cp -f engines/html-render/fonts/*.woff2 engines/html-render/fonts/fonts.css data/studio-engine/public/fonts/
-    log "  шрифты: $(ls engines/html-render/fonts/*.woff2 | wc -l) woff2 + fonts.css → data/studio-engine/public/fonts/"
-  fi
   # коллекция шрифтов /opt/fonts (fonts/fonts.list → fonts/google); качаем, если ещё нет или список новее каталога
   mkdir -p fonts/custom
   if [ ! -f fonts/fonts.json ] || [ fonts/fonts.list -nt fonts/fonts.json ]; then
@@ -178,18 +170,13 @@ check_all() {
   chk "playwright"          sh -c './shims/playwright --version && ./shims/pw-python -c "from playwright.sync_api import sync_playwright as p; b=p().start().chromium.launch(); print(\"python + chromium OK\"); b.close()"'
   chk "браузер HyperFrames" sh -c "ls data/files/hf-browser/chrome-headless-shell/linux-${HF_CHROME}/chrome-headless-shell-linux64/chrome-headless-shell"
   chk "коллекция шрифтов"   sh -c 'docker exec n8n-media-render sh -c "fc-list | grep -c /usr/share/fonts/n8n/" && docker exec n8n-app test -f /opt/fonts/fonts.json && echo "/opt/fonts в n8n"'
-  chk "шрифты каруселей"    sh -c 'test -f data/studio-engine/public/fonts/fonts.css && ls data/studio-engine/public/fonts/*.woff2 | wc -l'
-  if [ -f data/studio-engine/src/index.ts ]; then
-    chk "studio-engine (маскот)" sh -c 'test -d data/studio-engine/node_modules && echo "src + node_modules на месте"'
-  else
-    echo "  ⚠️  studio-engine: data/studio-engine/src отсутствует — маскот не соберётся (см. STACK.md → studio-engine)"
-  fi
+  chk "шрифты каруселей"    docker exec n8n-media-render sh -c 'test -f /opt/engines/html-render/fonts/fonts.css && ls /opt/engines/html-render/fonts/*.woff2 | wc -l'
   # реальный рендер html → png
   local job="data/carousel/jobs/_selftest"
   mkdir -p "$job"
   cat > "$job/slide_01.html" <<'HTML'
 <!doctype html><html><head><meta charset="utf-8">
-<link rel="stylesheet" href="file:///data/studio-engine/public/fonts/fonts.css">
+<link rel="stylesheet" href="file:///opt/engines/html-render/fonts/fonts.css">
 <style>body{margin:0;width:1080px;height:1350px;background:#0D0F12;color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Unbounded',sans-serif;font-weight:900;font-size:96px}</style>
 </head><body>render-html OK</body></html>
 HTML

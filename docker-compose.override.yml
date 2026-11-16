@@ -56,14 +56,12 @@ services:
     restart: always
     volumes:
     - /opt/n8n-install/data:/data
-    - /opt/n8n-install/data/studio-engine:/data/studio-engine
     - /opt/n8n-install/fonts:/opt/fonts:ro
     - /opt/n8n-install/fonts:/usr/share/fonts/n8n:ro   # fontconfig → Chromium, HyperFrames, Remotion, ffmpeg/libass видят шрифты по имени
     environment:
     - HTTP_PROXY=${PROXY_URL}
     - HTTPS_PROXY=${PROXY_URL}
     - NO_PROXY=${NO_PROXY}
-    - PIXABAY_API_KEY=${PIXABAY_API_KEY}
     - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
     - HYPERFRAMES_NO_UPDATE_CHECK=1
     - HYPERFRAMES_BROWSER_PATH=/data/files/hf-browser/chrome-headless-shell/linux-152.0.7977.30/chrome-headless-shell-linux64/chrome-headless-shell
