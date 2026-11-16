@@ -13,9 +13,8 @@ docker exec telegram-bot-api find /var/lib/telegram-bot-api -mindepth 3 -type f 
 docker exec telegram-bot-api find /tmp/telegram-bot-api -mindepth 1 -type f -mmin +$TMP_MIN -delete 2>/dev/null
 # 2. временные файлы отправки в Telegram (скачанные результаты, превью)
 find $D/tg-send -mindepth 1 -type f -mmin +$TMP_MIN -delete 2>/dev/null
-# 3. рендеры и задания каруселей (воркфлоу чистят за собой; это страховка на случай падения)
+# 3. рендеры (воркфлоу чистят за собой; это страховка на случай падения)
 find $D/reels -mindepth 1 -maxdepth 1 -type f -mmin +$((TG_H*60)) -delete 2>/dev/null
-find $D/carousel/jobs -mindepth 1 -maxdepth 1 -mmin +$((TG_H*60)) -exec rm -rf {} + 2>/dev/null
 
 after=$(df -Pm / | awk 'NR==2{print $4}')
 echo "[$(date '+%F %T')] cleanup: свободно ${before} → ${after} МБ"

@@ -19,7 +19,7 @@ fonts/
 
 ## Как использовать
 
-**HTML (HyperFrames, render-html, карусели)** — шрифты уже видны по имени, `@font-face` не обязателен:
+**HTML (HyperFrames, Playwright)** — шрифты уже видны по имени, `@font-face` не обязателен:
 
 ```html
 <link rel="stylesheet" href="file:///opt/fonts/fonts.css"> <!-- явная загрузка, если нужна гарантия -->

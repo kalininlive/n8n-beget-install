@@ -69,7 +69,7 @@ prepare_env() {
 # ---------- 2. Папки, шимы ----------
 prepare_files() {
   log "2/4 папки /data, шимы"
-  mkdir -p data/reels data/carousel/jobs data/files
+  mkdir -p data/reels data/files
   chmod +x shims/* 2>/dev/null || true
   mkdir -p data/tg-send logs
   # ежечасная уборка временных файлов (боты, отправка, рендеры) — см. scripts/cleanup_data.sh
@@ -153,7 +153,6 @@ check_all() {
   chk "контейнеры"          sh -c 'for c in n8n-app n8n-worker n8n-postgres n8n-redis n8n-traefik n8n-tools n8n-media-render edge-tts searxng sandbox-api sandbox-runner-1 faster-whisper $TG_CONTAINERS; do docker inspect -f "{{.State.Running}}" "$c" 2>/dev/null | grep -q true || { echo "не запущен: $c"; exit 1; }; done; echo "все запущены"'
   chk "n8n healthz"         docker exec n8n-app wget -qO- http://localhost:5678/healthz
   chk "remotion (шим)"      sh -c "./shims/remotion --help | head -n 1"
-  chk "render-html (шим)"   ./shims/render-html --version
   chk "ffmpeg (шим)"        ./shims/ffmpeg -version
   chk "edge-tts из n8n"     docker exec n8n-app wget -qO- http://edge-tts:5050/v1/models
   chk "searxng из n8n"      docker exec n8n-app wget -qO- 'http://searxng:8080/search?q=n8n&format=json'
@@ -163,25 +162,23 @@ check_all() {
   [ $tg = 1 ] && chk "telegram тома n8n"   docker exec n8n-app sh -c 'test -d /data/telegram-files && test -d /var/lib/telegram-bot-api && echo "смонтированы"'
   chk "faster-whisper из n8n" docker exec n8n-app wget -qO- http://faster-whisper:8000/health
   chk "whisper модель"      sh -c 'm=$(grep "^WHISPER_MODEL=" .env | cut -d= -f2-); docker exec faster-whisper curl -sf "http://localhost:8000/v1/models/$m" >/dev/null && echo "$m скачана"'
-  chk "шимы внутри n8n-app" docker exec n8n-app sh -c 'ls /opt/shims/render-html /opt/shims/remotion /opt/shims/edge-tts /opt/shims/whisper'
+  chk "шимы внутри n8n-app" docker exec n8n-app sh -c 'ls /opt/shims/remotion /opt/shims/playwright /opt/shims/edge-tts /opt/shims/whisper'
   chk "NO_PROXY в n8n-app"  docker exec n8n-app sh -c 'echo "$NO_PROXY" | grep -q faster-whisper && echo "$NO_PROXY" | grep -q telegram-bot-api && echo "$NO_PROXY" | grep -q edge-tts && echo "$NO_PROXY" | grep -q searxng && echo "$NO_PROXY" | grep -q sandbox-api && echo "$NO_PROXY"'
   chk "уборка (cron)"       sh -c 'test -f /etc/cron.d/n8n-data-cleanup && bash scripts/cleanup_data.sh | tail -n 1'
+  chk "gsap + three.js"     docker exec n8n-media-render node --no-deprecation -e "const t=require('three');require('gsap');require('fs').accessSync('/opt/engines/vendor/three/build/three.module.min.js');console.log('three r'+t.REVISION+', gsap OK')"
   chk "hyperframes (шим)"   sh -c './shims/hyperframes --version 2>&1 | tail -n 1'
   chk "playwright"          sh -c './shims/playwright --version && ./shims/pw-python -c "from playwright.sync_api import sync_playwright as p; b=p().start().chromium.launch(); print(\"python + chromium OK\"); b.close()"'
   chk "браузер HyperFrames" sh -c "ls data/files/hf-browser/chrome-headless-shell/linux-${HF_CHROME}/chrome-headless-shell-linux64/chrome-headless-shell"
   chk "коллекция шрифтов"   sh -c 'docker exec n8n-media-render sh -c "fc-list | grep -c /usr/share/fonts/n8n/" && docker exec n8n-app test -f /opt/fonts/fonts.json && echo "/opt/fonts в n8n"'
-  chk "шрифты каруселей"    docker exec n8n-media-render sh -c 'test -f /opt/engines/html-render/fonts/fonts.css && ls /opt/engines/html-render/fonts/*.woff2 | wc -l'
-  # реальный рендер html → png
-  local job="data/carousel/jobs/_selftest"
-  mkdir -p "$job"
-  cat > "$job/slide_01.html" <<'HTML'
+  # реальный рендер HTML → PNG через Playwright (браузер + шрифт из /opt/fonts)
+  mkdir -p data/files
+  cat > data/files/_selftest.html <<'HTML'
 <!doctype html><html><head><meta charset="utf-8">
-<link rel="stylesheet" href="file:///opt/engines/html-render/fonts/fonts.css">
 <style>body{margin:0;width:1080px;height:1350px;background:#0D0F12;color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Unbounded',sans-serif;font-weight:900;font-size:96px}</style>
-</head><body>render-html OK</body></html>
+</head><body>Рендер OK</body></html>
 HTML
-  chk "тестовый рендер PNG"  sh -c "./shims/render-html /data/carousel/jobs/_selftest --quiet >/dev/null && test -s $job/slide_01.png && ls -la $job/slide_01.png"
-  rm -rf "$job"
+  chk "тестовый рендер PNG"  sh -c "./shims/playwright screenshot --viewport-size=1080,1350 file:///data/files/_selftest.html /data/files/_selftest.png >/dev/null && test -s data/files/_selftest.png && ls -la data/files/_selftest.png"
+  rm -f data/files/_selftest.html data/files/_selftest.png
   # реальное распознавание: edge-tts озвучивает фразу → whisper её распознаёт
   mkdir -p data/files
   chk "тест edge-tts → whisper" sh -c './shims/edge-tts --voice ru-RU-DmitryNeural --text "Проверка распознавания речи" --write-media /data/files/_whisper_selftest.mp3 >/dev/null 2>&1 && ./shims/whisper /data/files/_whisper_selftest.mp3 ru | grep -o "\"text\":\"[^\"]*\"" | head -n 1'

@@ -2,7 +2,7 @@
 
 # 🌌 n8n-BEGET Install
 
-**Боевой стек n8n с видео-, карусельными и голосовыми движками, локальным распознаванием речи и Telegram Bot API на 2 ГБ — одной командой на чистый сервер Ubuntu.**
+**Боевой стек n8n с видео-, браузерными и голосовыми движками, локальным распознаванием речи и Telegram Bot API на 2 ГБ — одной командой на чистый сервер Ubuntu.**
 
 ![n8n](https://img.shields.io/badge/n8n-latest-EA4B71?logo=n8n&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
@@ -152,7 +152,7 @@ flowchart LR
 | **Remotion** (`remotion`, `@remotion/cli`) | 4.0.544 | видео из React-композиций (свои проекты — в томе `/data`) |
 | **HyperFrames** | 0.8.221 (закреплена в `Dockerfile.render`, автообновление CLI отключено; локально `npx hyperframes@0.8.221`) | HTML → видео (свои шаблоны и компоненты ставятся отдельно, под себя) |
 | **GSAP** | 3.15.1 | анимации в HTML офлайн: `file:///opt/engines/vendor/gsap/gsap.min.js`, в Node — `require('gsap')` |
-| **puppeteer-core** | 25.17.0 | движок `html-render` (карусели HTML → PNG, 1080×1350 @2x) |
+| **three.js** | 0.187.0 | 3D / WebGL в HTML офлайн: import map на `file:///opt/engines/vendor/three/build/three.module.min.js` (+ `examples/jsm/`), в Node — `import` из `/usr/local/lib/node_modules/three/build/three.module.js` |
 | ffmpeg + libass, ffprobe | системные | нарезка, склейка, субтитры, нормализация звука |
 | **Playwright** (Node + Python) | 1.65.1, свой Chromium в `/ms-playwright` | парсинг, скриншоты, автоматизация сайтов: шимы `playwright`, `pw-node`, `pw-python` |
 
@@ -193,7 +193,7 @@ flowchart LR
 
 ### Уборка и бэкапы
 
-- `scripts/cleanup_data.sh` — cron ежечасно: файлы Bot API (24 ч), `/data/tg-send` (3 ч), `/data/reels` и `/data/carousel/jobs` (24 ч).
+- `scripts/cleanup_data.sh` — cron ежечасно: файлы Bot API (24 ч), `/data/tg-send` (3 ч), `/data/reels` (24 ч).
 - `backup_n8n.sh` + cron 02:00: все workflows и credentials → zip → Telegram (< 50 МБ) или `backups/`.
 - `update_n8n.sh`: бэкап → новая версия n8n → пересборка → post-check движков → алерт в Telegram.
 
@@ -229,7 +229,7 @@ bash install-extras.sh --check                         # только прове
 4. **Шим = одна строка** `exec docker exec -i <container> <cmd> "$@"` в `shims/`, `chmod +x`.
 5. **Секреты только в `.env`** (шаблон `.env.template`); в compose — `${...}`.
 
-Шимы: `ffmpeg`, `ffprobe`, `yt-dlp`, `python`, `python3`, `fc-scan`, `edge-tts`, `whisper`, `remotion`, `hyperframes`, `playwright`, `pw-node`, `pw-python`, `render-html`.
+Шимы: `ffmpeg`, `ffprobe`, `yt-dlp`, `python`, `python3`, `fc-scan`, `edge-tts`, `whisper`, `remotion`, `hyperframes`, `playwright`, `pw-node`, `pw-python`.
 
 ---
 
@@ -252,8 +252,6 @@ docker compose build n8n-media-render && docker compose up -d n8n-media-render
 ├── docker-compose.yml                 # базовый стек
 ├── docker-compose.override.yml        # движки и доп. сервисы
 ├── Dockerfile.n8n / .render / .tools  # образы
-├── engines/
-│   └── html-render/                   # HTML → PNG (карусели) + шрифты
 ├── shims/                             # шимы вызова движков из n8n
 ├── docs/img/                          # картинки README
 ├── fonts/                             # коллекция шрифтов → /opt/fonts (fonts.list в git, файлы качает scripts/install-fonts.sh)
@@ -262,6 +260,6 @@ docker compose build n8n-media-render && docker compose up -d n8n-media-render
 ├── scripts/                           # cleanup_data.sh, cron_backup.sh
 ├── update_n8n.sh, backup_n8n.sh
 ├── .env.template  →  .env             # секреты, не в git
-├── data/                              # /data во всех контейнерах (reels/, carousel/jobs/, files/, tg-send/)
+├── data/                              # /data во всех контейнерах (reels/, files/, tg-send/)
 └── STACK.md, ENGINES.md, UPDATE_HISTORY.md
 ```

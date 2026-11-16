@@ -14,7 +14,7 @@
 | `n8n-redis` | `redis:7-alpine` | `redis_data` | — | очередь Bull | `docker exec n8n-redis redis-cli ping` | `docker compose pull n8n-redis && up -d n8n-redis` |
 | `n8n-traefik` | `traefik:v3`, `DOCKER_API_VERSION=1.44`, редирект http→https (+ `extra_hosts` из override); 2.10 на Docker ≥ 25 не видит контейнеры | `./letsencrypt`, `./traefik_dynamic`, docker.sock | — | HTTPS для `${DOMAIN}` | `curl -I https://$DOMAIN` | версия в `docker-compose.yml`; сертификаты в `letsencrypt/acme.json` |
 | `n8n-tools` | `docker-compose.yml` → `Dockerfile.tools` (alpine + ffmpeg, yt-dlp, python3, fontconfig) | `/data`, docker.sock | `ffmpeg`, `yt-dlp`, `python`, `python3`, `fc-scan` | всё, где нужен ffmpeg/yt-dlp/python | `shims/ffmpeg -version` | `docker compose build n8n-tools && up -d n8n-tools` |
-| `n8n-media-render` | `docker-compose.override.yml` → `Dockerfile.render` (`node:22-bookworm-slim` + Chromium + ffmpeg + шрифты + `@remotion/cli`, `remotion`, `hyperframes`, `gsap`, `playwright` (+ Python) глобально + `/opt/engines/html-render`; GSAP для HTML — `file:///opt/engines/vendor/gsap/`) | `/opt/n8n-install/data → /data`, `fonts → /opt/fonts`; env `PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium`, прокси | `remotion`, `hyperframes`, `playwright`, `pw-node`, `pw-python`, **`render-html`** | видео (Remotion, HyperFrames), карусели, парсинг сайтов | `shims/remotion --help`, `shims/render-html --version`, `shims/playwright --version` | `docker compose build n8n-media-render && docker compose up -d n8n-media-render` (из ПК: `npm run deploy:html-render`) |
+| `n8n-media-render` | `docker-compose.override.yml` → `Dockerfile.render` (`node:22-bookworm-slim` + Chromium + ffmpeg + шрифты + `@remotion/cli`, `remotion`, `hyperframes`, `gsap`, `three`, `playwright` (+ Python) глобально; GSAP для HTML — `file:///opt/engines/vendor/gsap/`) | `/opt/n8n-install/data → /data`, `fonts → /opt/fonts`; env прокси, `HYPERFRAMES_BROWSER_PATH` | `remotion`, `hyperframes`, `playwright`, `pw-node`, `pw-python` | видео (Remotion, HyperFrames), скриншоты и парсинг сайтов | `shims/remotion --help`, `shims/playwright --version` | `docker compose build n8n-media-render && docker compose up -d n8n-media-render` (из ПК: `npm run deploy:html-render`) |
 | `n8n-bot` | `docker-compose.yml` → `bot/Dockerfile` (node:20-alpine + docker-cli, jq, zip) | `./ → /opt/n8n-install` (вся папка), docker.sock, cli-plugins | — | Telegram-админ: `/status`, `/logs`, `/backups`, `/update` | `/status` в Telegram | `docker compose build n8n-bot && up -d n8n-bot` |
 | `edge-tts` | override: `travisvn/openai-edge-tts:latest` + наши `edge-tts-custom/server.py`, `tts_handler.py` (эндпоинт `/v1/audio/speech-with-timestamps`) | `/data`, два `.py` поверх образа `:ro` | `edge-tts` | озвучка | `docker exec n8n-app wget -qO- http://edge-tts:5050/v1/models` | `docker compose pull edge-tts && up -d edge-tts` (после pull проверить, что наши `.py` совместимы с новым образом) |
 | `faster-whisper` | override: `ghcr.io/speaches-ai/speaches:0.8.3-cpu` (бесплатный open-source сервер над [faster-whisper](https://github.com/SYSTRAN/faster-whisper), MIT; OpenAI-совместимый API, всё локально, без ключей) | том `whisper-models` (модели HF), `/data:ro` | `whisper` | распознавание речи вместо AssemblyAI (монтаж, субтитры, транскрибация) | `docker exec n8n-app wget -qO- http://faster-whisper:8000/health` | модель — `WHISPER_MODEL` в `.env` + `bash install-extras.sh`; образ — `WHISPER_IMAGE_TAG`, `docker compose up -d faster-whisper` |
@@ -34,7 +34,6 @@
 | `docker-compose.yml` | базовый стек (n8n, worker, postgres, redis, traefik, tools, bot). Домен — `${DOMAIN}` |
 | `docker-compose.override.yml` | движки и доп. сервисы (media-render, edge-tts, faster-whisper, telegram-bot-api, searxng, sandbox). Загружается compose автоматически. **Новые сервисы — только сюда** |
 | `Dockerfile.n8n` / `Dockerfile.render` / `Dockerfile.tools` / `bot/Dockerfile` | образы |
-| `engines/html-render/` | движок HTML → PNG (см. ENGINES.md) — запекается в `n8n-media-render` |
 | `shims/` | шимы |
 | `edge-tts-custom/` | патч edge-tts с пословными таймкодами |
 | `searxng-settings.yml` | JSON API для SearXNG |
@@ -66,7 +65,7 @@
 | `NO_PROXY` | ✅ читается из `.env` при пересоздании n8n — значение сохраняется. Риск только если `.env` перезаписать вручную |
 | Переименование сервисов в compose | ⚠️ шимы завязаны на `container_name` (`n8n-media-render`, `n8n-tools`, `edge-tts`, `faster-whisper`). Менять имена = менять `shims/*` |
 | Бот запускал `update_n8n.sh` без override и без `Dockerfile.n8n` (в контейнер были смонтированы отдельные файлы, `.env` «залипал» на старом inode после `sed -i`) | 🔧 исправлено в `stack-v2`: `n8n-bot` монтирует всю папку `./:/opt/n8n-install`, `COMPOSE_FILE` включает override. Требует `docker compose up -d n8n-bot` один раз |
-| Post-check | 🔧 добавлен: после обновления проверяются `remotion --help`, `render-html --help`, `ffmpeg`, `edge-tts`, `telegram-bot-api`, `faster-whisper`, шимы в n8n-app; при сбое — сообщение в Telegram |
+| Post-check | 🔧 добавлен: после обновления проверяются `remotion --help`, `playwright --version`, `ffmpeg`, `edge-tts`, `telegram-bot-api`, `faster-whisper`, шимы в n8n-app; при сбое — сообщение в Telegram |
 | Ручной `docker compose pull` + `up -d --remove-orphans` | ⚠️ подтянет `edge-tts:latest` / `searxng:latest` и пересоздаст их. Для обновления n8n предпочитать `update_n8n.sh` (бот) — он трогает только n8n |
 
 ## 5. Перевод бота на локальный Telegram Bot API (до 2 ГБ)
@@ -84,5 +83,5 @@
 ## 6. Уборка временных файлов
 
 `scripts/cleanup_data.sh` — cron каждый час (`/etc/cron.d/n8n-data-cleanup`, ставит `install-extras.sh`), лог `logs/cleanup.log`.
-Файлы ботов в локальном Bot API — 24 ч (`CLEANUP_TG_HOURS`); `/data/tg-send` — 3 ч (`CLEANUP_TMP_MIN`); `/data/reels`, `/data/carousel/jobs` — 24 ч. Правило для новых воркфлоу: временные файлы класть только в эти папки — тогда они уберутся, даже если выполнение упало.
+Файлы ботов в локальном Bot API — 24 ч (`CLEANUP_TG_HOURS`); `/data/tg-send` — 3 ч (`CLEANUP_TMP_MIN`); `/data/reels` — 24 ч. Правило для новых воркфлоу: временные файлы класть только в эти папки — тогда они уберутся, даже если выполнение упало.
 

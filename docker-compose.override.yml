@@ -62,7 +62,6 @@ services:
     - HTTP_PROXY=${PROXY_URL}
     - HTTPS_PROXY=${PROXY_URL}
     - NO_PROXY=${NO_PROXY}
-    - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
     - HYPERFRAMES_NO_UPDATE_CHECK=1
     - HYPERFRAMES_BROWSER_PATH=/data/files/hf-browser/chrome-headless-shell/linux-152.0.7977.30/chrome-headless-shell-linux64/chrome-headless-shell
   sandbox-certs:

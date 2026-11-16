@@ -9,7 +9,6 @@
 |---|---|
 | `remotion` | Remotion CLI 4.0.544 |
 | `hyperframes` | HyperFrames 0.8.221 (браузер — `HYPERFRAMES_BROWSER_PATH`, ставит `install-extras.sh`) |
-| `render-html` | html-render: HTML → PNG |
 | `playwright`, `pw-node`, `pw-python` | Playwright 1.65.1: CLI, Node-скрипт, Python-скрипт |
 | `ffmpeg`, `ffprobe`, `fc-scan` | ffmpeg + libass, fontconfig |
 | `edge-tts`, `whisper` | озвучка и распознавание речи |
@@ -37,35 +36,21 @@ docker exec -it n8n-media-render sh -lc 'cd /data/files/my-remotion && npm ci'
 ```
 В Node — `require('gsap')` через `NODE_PATH=/usr/local/lib/node_modules`.
 
----
-
-## 2. Карусели (HTML → PNG) — html-render
-
-**Что это.** Рендер HTML-слайдов в PNG: `puppeteer-core` + системный Chromium. Viewport `1080×1350 @ 2x`, ожидание `load` + `networkidle0` + `document.fonts.ready`.
-
-**Где лежит.** В образе: `/opt/engines/html-render/render.mjs` (репо `engines/html-render/`). Обновление кода = пересборка образа.
-
-**Вызов.**
-```
-/opt/shims/render-html /data/carousel/jobs/<runId> [--width 1080] [--height 1350] [--scale 2] [--out <dir>] [--timeout 30000] [--pattern "*.html"] [--quiet]
-/opt/shims/render-html --help | --version
-```
-stdout — один JSON: `{ok, engine, jobDir, out, width, height, scale, count, ms, slides:[{html, png, bytes}]}`; при ошибке `{ok:false, error}` и код 1. Прогресс — в stderr.
-
-**Типовой воркфлоу:** Write File `slide_NN.html` в `/data/carousel/jobs/<runId>/` (не `echo base64` — у аргумента shell лимит 128 KB) → Execute Command `render-html … --quiet </dev/null` → `JSON.parse($json.stdout)` → Read File по `slides[].png` → отправка → `rm -rf` папки задачи.
-
-**Шрифты и картинки.**
+**three.js 0.187.0** (3D / WebGL, только ES-модули):
 ```html
-<link rel="stylesheet" href="file:///opt/engines/html-render/fonts/fonts.css">   <!-- Inter, Manrope, Montserrat, Rubik, Unbounded -->
-<img src="file:///data/files/my-assets/logo.png">
+<script type="importmap">{"imports":{
+  "three": "file:///opt/engines/vendor/three/build/three.module.min.js",
+  "three/addons/": "file:///opt/engines/vendor/three/examples/jsm/"}}</script>
+<script type="module">
+  import * as THREE from 'three';
+  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+</script>
 ```
-Любое семейство из `/opt/fonts` доступно и просто по имени. Google Fonts / CDN не используйте: без интернета у контейнера `networkidle0` ждёт до таймаута. Chromium запущен с `--allow-file-access-from-files`.
-
-**Отладка.** `Папка задачи не найдена` — передан хостовый путь `/opt/n8n-install/data/...` вместо `/data/...`; системный шрифт на PNG — опечатка в `font-family`; таймаут — внешние `<link>`/`<img>`.
+В Node — `import * as THREE from '/usr/local/lib/node_modules/three/build/three.module.js'` (ESM не читает `NODE_PATH`); `require('three')` тоже работает, но помечен устаревшим. Если браузер не грузит модули по `file://`, отдавайте папку проекта через локальный http-сервер (так делает HyperFrames при рендере).
 
 ---
 
-## 3. Playwright
+## 2. Playwright
 
 Node и Python, браузеры в образе (`PLAYWRIGHT_BROWSERS_PATH=/ms-playwright`). Скрипты кладите в `/data`:
 ```bash
@@ -77,7 +62,7 @@ Node и Python, браузеры в образе (`PLAYWRIGHT_BROWSERS_PATH=/ms-
 
 ---
 
-## 4. Распознавание речи — faster-whisper
+## 3. Распознавание речи — faster-whisper
 
 Контейнер `faster-whisper` (`ghcr.io/speaches-ai/speaches:0.8.3-cpu`, MIT): модели Whisper скачиваются один раз в том `whisper-models`, считается на CPU сервера, без ключей.
 
@@ -92,7 +77,7 @@ Node и Python, браузеры в образе (`PLAYWRIGHT_BROWSERS_PATH=/ms-
 
 ---
 
-## 5. Проверка всех движков
+## 4. Проверка всех движков
 
-- `bash /opt/n8n-install/install-extras.sh --check` — контейнеры, шимы, `NO_PROXY`, браузеры, Playwright, шрифты, тестовый рендер PNG, сквозной тест edge-tts → whisper.
+- `bash /opt/n8n-install/install-extras.sh --check` — контейнеры, шимы, `NO_PROXY`, браузеры, Playwright, шрифты, тестовый рендер HTML → PNG через Playwright, сквозной тест edge-tts → whisper.
 - После обновления n8n `update_n8n.sh` сам проверяет движки и пишет в Telegram, если что-то не отвечает.

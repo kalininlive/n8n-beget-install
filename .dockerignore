@@ -1,5 +1,5 @@
 # Контекст сборки для Dockerfile.n8n / Dockerfile.render / Dockerfile.tools.
-# Всё тяжёлое и секретное исключаем — в образы попадает только engines/.
+# Всё тяжёлое и секретное исключаем из контекста сборки.
 .git
 .env*
 data
@@ -7,7 +7,6 @@ backups
 logs
 letsencrypt
 bot/node_modules
-engines/*/node_modules
 *.bak*
 *.save
 *.log

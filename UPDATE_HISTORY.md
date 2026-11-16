@@ -17,8 +17,8 @@
 - n8n по умолчанию `:latest` (update_n8n.sh собирает с `--pull`); Traefik `v3`.
 - Установщик: проверка ОС (Ubuntu 22.04/24.04/26.04 LTS, x86_64), RAM, диска, портов, DNS и токена бота; неинтерактивный режим для агентов (AGENTS.md); повторный запуск сохраняет .env; браузер HyperFrames ставится сам; Bot API запускается только с ключами.
 - Шрифты: коллекция 62 семейств с кириллицей → /opt/fonts (scripts/install-fonts.sh, fonts/fonts.list), fontconfig в media-render и tools.
-- Движки: Remotion 4.0.544, HyperFrames 0.8.221, GSAP 3.15.1, puppeteer-core 25.17.0, Playwright 1.65.1 (Node + Python, шимы `playwright`, `pw-node`, `pw-python`).
+- Движки: Remotion 4.0.544, HyperFrames 0.8.221, GSAP 3.15.1, three.js 0.187.0, Playwright 1.65.1 (Node + Python, шимы `playwright`, `pw-node`, `pw-python`).
 - install.sh спрашивает `TELEGRAM_API_ID/HASH` (локальный Bot API, файлы до 2 ГБ ставится всегда).
 - RSSHub убран из compose.
 - Сборка очищена от индивидуальной настройки: движки монтажа (kraft-reel, montage-v2, audio-prep), библиотека компонентов HyperFrames, проект маскота (studio-engine), воркфлоу, набор `beget/` и всё, что относится к конкретному боту. Стили роликов, шаблоны и воркфлоу каждый ставит под себя.
-- Шрифты каруселей html-render — в образе: `file:///opt/engines/html-render/fonts/fonts.css`.
+- Убран рендер каруселей html-render (puppeteer-core, шим `render-html`): тестовый рендер HTML → PNG в `--check` теперь через Playwright.
