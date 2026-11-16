@@ -58,7 +58,7 @@ jobs:
             ffmpeg -version | head -n1
             test -x "$HYPERFRAMES_BROWSER_PATH" && "$HYPERFRAMES_BROWSER_PATH" --headless --no-sandbox --dump-dom "data:text/html,<p>hf-ok</p>" | grep -q hf-ok && echo "hf browser: OK"
             node --no-deprecation -e "const t=require(\"three\");require(\"gsap\");console.log(\"three r\"+t.REVISION+\", gsap OK\")"
-            test -f /opt/engines/vendor/gsap/gsap.min.js && test -f /opt/engines/vendor/three/build/three.module.min.js
+            test -f /opt/engines/vendor/gsap/gsap.min.js && test -f /opt/engines/vendor/three/build/three.module.js
             echo "fonts: $(fc-list | grep -c /opt/fonts/) faces, $(grep -o "\"family\"" /opt/fonts/fonts.json | wc -l) families"
             fc-match "Unbounded:weight=900" | grep -qi unbounded && fc-match "Golos Text" | grep -qi golos
             cat > /tmp/t.html <<HTML

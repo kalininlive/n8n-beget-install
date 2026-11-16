@@ -69,13 +69,13 @@ RUN npm install -g gsap@${GSAP_VERSION} \
     && test -f /opt/engines/vendor/gsap/gsap.min.js
 
 # three.js (3D в HTML/WebGL) — тоже локально, без CDN. С r160 только ES-модули:
-#   HTML: <script type="importmap">{"imports":{"three":"file:///opt/engines/vendor/three/build/three.module.min.js",
+#   HTML: <script type="importmap">{"imports":{"three":"file:///opt/engines/vendor/three/build/three.module.js",
 #         "three/addons/":"file:///opt/engines/vendor/three/examples/jsm/"}}</script>  затем  import * as THREE from 'three'
 #   Node: import * as THREE from '/usr/local/lib/node_modules/three/build/three.module.js' (require('three') устарел)
 ARG THREE_VERSION=0.187.0
 RUN npm install -g three@${THREE_VERSION} \
     && ln -s /usr/local/lib/node_modules/three /opt/engines/vendor/three \
-    && test -f /opt/engines/vendor/three/build/three.module.min.js
+    && test -f /opt/engines/vendor/three/build/three.module.js
 ENV NODE_PATH=/usr/local/lib/node_modules
 
 # Playwright (Node + Python) со своими браузерами Chromium — для парсинга, скриншотов, автоматизации сайтов.

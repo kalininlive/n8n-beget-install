@@ -154,7 +154,7 @@ flowchart LR
 | **Remotion** (`remotion`, `@remotion/cli`) | 4.0.544 | видео из React-композиций (свои проекты — в томе `/data`) |
 | **HyperFrames** | 0.8.221 (закреплена в `Dockerfile.render`, автообновление CLI отключено; локально `npx hyperframes@0.8.221`) | HTML → видео (свои шаблоны и компоненты ставятся отдельно, под себя) |
 | **GSAP** | 3.15.1 | анимации в HTML офлайн: `file:///opt/engines/vendor/gsap/gsap.min.js`, в Node — `require('gsap')` |
-| **three.js** | 0.187.0 | 3D / WebGL в HTML офлайн: import map на `file:///opt/engines/vendor/three/build/three.module.min.js` (+ `examples/jsm/`), в Node — `import` из `/usr/local/lib/node_modules/three/build/three.module.js` |
+| **three.js** | 0.187.0 | 3D / WebGL в HTML офлайн: import map на `file:///opt/engines/vendor/three/build/three.module.js` (+ `examples/jsm/`), в Node — `import` из `/usr/local/lib/node_modules/three/build/three.module.js` |
 | ffmpeg + libass, ffprobe | системные | нарезка, склейка, субтитры, нормализация звука |
 | **Playwright** (Node + Python) | 1.65.1, свой Chromium в `/ms-playwright` | парсинг, скриншоты, автоматизация сайтов: шимы `playwright`, `pw-node`, `pw-python` |
 

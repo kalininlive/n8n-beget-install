@@ -39,7 +39,7 @@ docker exec -it n8n-media-render sh -lc 'cd /data/files/my-remotion && npm ci'
 **three.js 0.187.0** (3D / WebGL, только ES-модули):
 ```html
 <script type="importmap">{"imports":{
-  "three": "file:///opt/engines/vendor/three/build/three.module.min.js",
+  "three": "file:///opt/engines/vendor/three/build/three.module.js",
   "three/addons/": "file:///opt/engines/vendor/three/examples/jsm/"}}</script>
 <script type="module">
   import * as THREE from 'three';

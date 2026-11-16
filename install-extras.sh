@@ -176,7 +176,7 @@ check_all() {
   chk "шимы внутри n8n-app" docker exec n8n-app sh -c 'ls /opt/shims/remotion /opt/shims/playwright /opt/shims/edge-tts /opt/shims/whisper'
   chk "NO_PROXY в n8n-app"  docker exec n8n-app sh -c 'echo "$NO_PROXY" | grep -q faster-whisper && echo "$NO_PROXY" | grep -q telegram-bot-api && echo "$NO_PROXY" | grep -q edge-tts && echo "$NO_PROXY" | grep -q searxng && echo "$NO_PROXY" | grep -q sandbox-api && echo "$NO_PROXY"'
   chk "уборка (cron)"       sh -c 'test -f /etc/cron.d/n8n-data-cleanup && bash scripts/cleanup_data.sh | tail -n 1'
-  chk "gsap + three.js"     docker exec n8n-media-render node --no-deprecation -e "const t=require('three');require('gsap');require('fs').accessSync('/opt/engines/vendor/three/build/three.module.min.js');console.log('three r'+t.REVISION+', gsap OK')"
+  chk "gsap + three.js"     docker exec n8n-media-render node --no-deprecation -e "const t=require('three');require('gsap');require('fs').accessSync('/opt/engines/vendor/three/build/three.module.js');console.log('three r'+t.REVISION+', gsap OK')"
   chk "hyperframes (шим)"   sh -c './shims/hyperframes --version 2>&1 | tail -n 1'
   chk "playwright"          sh -c './shims/playwright --version && ./shims/pw-python -c "from playwright.sync_api import sync_playwright as p; b=p().start().chromium.launch(); print(\"python + chromium OK\"); b.close()"'
   chk "браузер HyperFrames" docker exec n8n-media-render sh -c 'test -x "$HYPERFRAMES_BROWSER_PATH" && echo "$HYPERFRAMES_BROWSER_PATH"'
