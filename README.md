@@ -2,7 +2,7 @@
 
 # 🌌 n8n-BEGET Install
 
-**Production-стек n8n с видео-, карусельными и голосовыми движками, локальным распознаванием речи и Telegram Bot API на 2 ГБ — одной командой на чистый Ubuntu 22.04 / 24.04.**
+**Боевой стек n8n с видео-, карусельными и голосовыми движками, локальным распознаванием речи и Telegram Bot API на 2 ГБ — одной командой на чистый сервер Ubuntu.**
 
 ![n8n](https://img.shields.io/badge/n8n-latest-EA4B71?logo=n8n&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
@@ -11,9 +11,9 @@
 ![GSAP](https://img.shields.io/badge/GSAP-3.15.1-88CE02?logo=greensock&logoColor=black)
 ![ffmpeg](https://img.shields.io/badge/ffmpeg-libass-007808?logo=ffmpeg&logoColor=white)
 ![Telegram](https://img.shields.io/badge/Telegram_Bot_API-2_GB-26A5E4?logo=telegram&logoColor=white)
-![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04%20%7C%2024.04-E95420?logo=ubuntu&logoColor=white)
+![Ubuntu](https://img.shields.io/badge/Ubuntu-24.04_LTS_(22.04%20%7C%2026.04)-E95420?logo=ubuntu&logoColor=white)
 
-[Установка](#-установка) · [Ключи Telegram](#-ключи-telegram-bot-api-файлы-до-2-гб) · [Состав](#-что-входит-в-сборку) · [Стили роликов](VIDEO_STYLES.md) · [Сервисы](STACK.md) · [Движки](ENGINES.md) · [История](UPDATE_HISTORY.md)
+[Установка](#-установка) · [Через агента](#-установка-через-ии-агента) · [Ключи Telegram](#-ключи-telegram-bot-api-файлы-до-2-гб) · [Состав](#-что-входит-в-сборку) · [Стили роликов](VIDEO_STYLES.md) · [Сервисы](STACK.md) · [Движки](ENGINES.md) · [История](UPDATE_HISTORY.md)
 
 </div>
 
@@ -21,32 +21,76 @@
 
 ---
 
+## 🖥️ Требования к серверу
+
+| | Минимум | Рекомендуется |
+|---|---|---|
+| ОС | Ubuntu **22.04 / 24.04 / 26.04 LTS** (чистая) | **Ubuntu 24.04 LTS** |
+| Процессор | 2 vCPU, x86_64 (amd64) | 4+ vCPU |
+| Память | 4 ГБ RAM | 8 ГБ RAM |
+| Диск | 25 ГБ свободно | 50+ ГБ SSD/NVMe |
+| Сеть | публичный IPv4, свободные порты 80 и 443 | — |
+
+> **Какую Ubuntu выбрать?** Берите **24.04 LTS** — на ней сборка работает в бою, поддержка до 2029 года. 22.04 и 26.04 LTS тоже поддерживаются: всё работает в Docker, и от версии ОС почти ничего не зависит. Промежуточные версии (25.10 и т.п.) и ARM-процессоры не подходят: браузер рендера HyperFrames собран только под x86_64. Установщик сам проверит ОС, память, диск, порты и DNS перед началом.
+
 ## ⚡ Установка
 
+На сервере под root:
+
 ```bash
-bash <(curl -s https://raw.githubusercontent.com/kalininlive/n8n-beget-install/stack-v2/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/kalininlive/n8n-beget-install/stack-v2/install.sh)
 ```
 
 <p align="center"><img src="docs/img/install-terminal.svg" alt="Диалог установщика" width="760"></p>
 
-Установщик задаёт вопросы в 4 шага: **домен и SSL** → **секреты n8n** (можно сгенерировать) → **Telegram** (бот + ключи Bot API) → **прокси** (можно пропустить). Дальше всё сам: Docker → клон репо в `/opt/n8n-install` → `.env` → `install-extras.sh` → `docker compose build && up -d` → cron → проверка.
+Установщик проверяет сервер, затем спрашивает данные в 5 шагов:
+
+1. **Домен и SSL.** Домен для n8n и email для сертификата. Проверяет, что DNS уже указывает на сервер.
+2. **Секреты n8n.** Пароль Postgres и ключ шифрования. Нажмите Enter, и они сгенерируются сами.
+3. **Админ-бот Telegram.** Токен от @BotFather и ваш ID. Токен проверяется прямо в Telegram.
+4. **Telegram Bot API на 2 ГБ.** `api_id` и `api_hash`, с пояснением, где их взять.
+5. **Прокси.** Необязательно.
+
+После «Итого» и подтверждения всё дальше идёт само, 15–30 минут: пакеты → swap (если RAM < 8 ГБ) → Docker → код в `/opt/n8n-install` → `.env` → сборка образов → ядро n8n → движки, модели, браузер рендера, шрифты → полная самопроверка → бэкап по cron → сообщение в Telegram.
 
 **Что подготовить заранее**
 
 | Что | Где взять | Обязательно |
 |---|---|---|
-| Сервер Ubuntu 22.04/24.04, root, от 4 ГБ RAM (8 ГБ — комфортно для рендера) | любой VPS | ✅ |
-| Домен, A-запись → IP сервера | панель регистратора | ✅ |
+| VPS по требованиям выше, доступ root по SSH | любой хостинг | ✅ |
+| Домен или поддомен, **A-запись → IP сервера** | панель регистратора | ✅ |
 | Токен бота | [@BotFather](https://t.me/BotFather) → `/newbot` | ✅ |
 | Ваш Telegram ID | [@userinfobot](https://t.me/userinfobot) | ✅ |
-| `api_id` + `api_hash` | [my.telegram.org](https://my.telegram.org) — см. ниже | желательно (иначе лимит 20 МБ) |
+| `api_id` + `api_hash` | [my.telegram.org](https://my.telegram.org) — [инструкция](#-ключи-telegram-bot-api-файлы-до-2-гб) | желательно (без них лимит 20 МБ) |
 | HTTP-прокси | ваш провайдер | нет |
 
-Без вопросов (CI / повторная установка) — задайте ответы переменными:
+**После установки**
+
+1. Откройте `https://ваш-домен` и создайте аккаунт владельца n8n.
+2. В кредах Telegram в n8n укажите **Base URL: `http://telegram-bot-api-proxy`**.
+3. Сохраните `N8N_ENCRYPTION_KEY` из `/opt/n8n-install/.env` в надёжном месте: без него не восстановить креды из бэкапа.
+
+Повторный запуск той же команды безопасен. Он обновит код и сохранит пароли и ключ шифрования из существующего `.env`.
+
+### 🤖 Установка через ИИ-агента
+
+Дайте своему агенту (Claude Code, Codex, Cursor…) с SSH-доступом к серверу такое задание:
+
+```text
+Установи мне n8n из репозитория https://github.com/kalininlive/n8n-beget-install (ветка stack-v2)
+по инструкции AGENTS.md. Сервер: <IP>, root. Домен: <домен>. Сначала спроси у меня
+все недостающие данные одним сообщением, проверь DNS, затем установи и отчитайся
+результатом install-extras.sh --check.
+```
+
+Агент возьмёт [AGENTS.md](AGENTS.md): там список данных, неинтерактивный запуск (`NONINTERACTIVE=1` + переменные окружения), коды выхода и разбор частых проблем.
+
+Без вопросов вручную (CI, свои скрипты):
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/kalininlive/n8n-beget-install/stack-v2/install.sh -o install.sh
 DOMAIN=n8n.example.com EMAIL=me@example.com TG_BOT_TOKEN=… TG_USER_ID=… \
-TELEGRAM_API_ID=… TELEGRAM_API_HASH=… bash install.sh
+TELEGRAM_API_ID=… TELEGRAM_API_HASH=… NONINTERACTIVE=1 bash install.sh
 ```
 
 ### 🔑 Ключи Telegram Bot API (файлы до 2 ГБ)
@@ -186,9 +230,8 @@ RSSHub и Дзен-публикатор (`kalininlive/dzen-factory`, прива�
 | Нет | Статус |
 |---|---|
 | Дзен-публикатор | отдельный приватный репозиторий `dzen-factory`, ставится вручную (его `deploy.sh`) |
-| Юзер-бот Telegram для файлов 2–4 ГБ | не входит (Bot API ограничен 2 ГБ); отдельные проекты `City News Hub/userbot` (Telethon), `SpyUserbotWebsansay` (GramJS) |
-| studio-engine (проект маскота, ≈1 ГБ) | вне git, на сервере в `data/studio-engine`; план публикации — STACK.md §5 |
-| kraft-reel и montage-v2 «запечены в образ» | пока ставятся в том `/data/files/…` командами `deploy:kraft-reel` / `deploy:montage-v2` из `moy-n8n` |
+| Юзер-бот Telegram для файлов 2–4 ГБ | не входит: Bot API ограничен 2 ГБ, больше — только аккаунт Premium через MTProto (Telethon/GramJS) |
+| studio-engine (проект маскота, ≈1 ГБ) | вне git: Remotion установлен, но сам проект персонажа кладётся в `data/studio-engine` отдельно (STACK.md §5); остальные движки работают без него |
 
 ---
 

@@ -18,6 +18,7 @@
 
 ## 2026-11-16 — актуализация сборки
 - n8n по умолчанию `:latest` (update_n8n.sh собирает с `--pull`); Traefik `v3`.
+- Установщик: проверка ОС (Ubuntu 22.04/24.04/26.04 LTS, x86_64), RAM, диска, портов, DNS и токена бота; неинтерактивный режим для агентов (AGENTS.md); повторный запуск сохраняет .env; движки kraft-reel/montage-v2 и браузер HyperFrames ставятся из репо; Bot API запускается только с ключами.
 - Шрифты: коллекция 62 семейств с кириллицей → /opt/fonts (scripts/install-fonts.sh, fonts/fonts.list), fontconfig в media-render и tools.
 - Движки: Remotion 4.0.544, HyperFrames 0.8.221 (та же версия, что на компьютере владельца), GSAP 3.15.1, puppeteer-core 25.17.0, fontkit 3.0.0.
 - montage-v2 0.5.4 (17 стилей, EDL, audio-prep, QA-инспектор), шим `cleanup-genesis-job`, набор `beget/` для серверов с шаблоном Beget.

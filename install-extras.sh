@@ -85,6 +85,7 @@ prepare_files() {
     cp -f engines/html-render/fonts/*.woff2 engines/html-render/fonts/fonts.css data/studio-engine/public/fonts/
     log "  шрифты: $(ls engines/html-render/fonts/*.woff2 | wc -l) woff2 + fonts.css → data/studio-engine/public/fonts/"
   fi
+  install_engines
   # коллекция шрифтов /opt/fonts (fonts/fonts.list → fonts/google); качаем, если ещё нет или список новее каталога
   mkdir -p fonts/custom
   if [ ! -f fonts/fonts.json ] || [ fonts/fonts.list -nt fonts/fonts.json ]; then
@@ -92,6 +93,33 @@ prepare_files() {
   else
     log "  коллекция шрифтов уже есть ($(grep -o '"family"' fonts/fonts.json | wc -l) семейств)"
   fi
+}
+
+# Движки монтажа kraft-reel и montage-v2 живут в томе /data/files/<имя>/engine/<имя> (не в образе).
+# Копируем из репо; прежняя версия → engine.prev (откат: cp -a engine.prev/<имя> engine/).
+install_engines() {
+  local e dst
+  for e in kraft-reel montage-v2; do
+    [ -d "engines/$e" ] || continue
+    dst="data/files/$e/engine"
+    mkdir -p "$dst"
+    if [ -d "$dst/$e" ]; then
+      if diff -rq "engines/$e" "$dst/$e" >/dev/null 2>&1; then log "  движок $e: актуален"; continue; fi
+      rm -rf "data/files/$e/engine.prev"; mkdir -p "data/files/$e/engine.prev"; cp -a "$dst/$e" "data/files/$e/engine.prev/"
+    fi
+    rm -rf "$dst/$e"; cp -a "engines/$e" "$dst/$e"
+    log "  движок $e $(grep -m1 '"version"' "engines/$e/package.json" | grep -o '[0-9][0-9.]*') → $dst/$e"
+  done
+}
+
+# Браузер HyperFrames (Chrome for Testing headless-shell) → /data/files/hf-browser; версия = в шиме montage-v2
+HF_CHROME="152.0.7977.30"
+install_hf_browser() {
+  if ls data/files/hf-browser/chrome-headless-shell/linux-${HF_CHROME}/chrome-headless-shell-linux64/chrome-headless-shell >/dev/null 2>&1; then
+    log "  браузер HyperFrames: есть (${HF_CHROME})"; return 0
+  fi
+  log "  браузер HyperFrames: скачиваю chrome-headless-shell ${HF_CHROME} (~100 МБ)"
+  docker exec n8n-media-render npx -y @puppeteer/browsers install "chrome-headless-shell@${HF_CHROME}" --path /data/files/hf-browser 2>&1 | tail -n 2     || log "  ⚠ не скачался — повторить: bash install-extras.sh (нужен доступ к storage.googleapis.com / PROXY_URL)"
 }
 
 # ---------- 3. Запуск сервисов ----------
@@ -113,6 +141,7 @@ start_services() {
   fi
   docker compose up -d n8n-media-render
   docker exec n8n-media-render fc-cache -f >/dev/null 2>&1 && log "  fc-cache: шрифты /opt/fonts проиндексированы" || true
+  install_hf_browser
   if [ "${NO_PROXY_CHANGED:-0}" = "1" ]; then
     log "  NO_PROXY изменился — пересоздаю n8n и n8n-worker"
     docker compose up -d n8n n8n-worker
@@ -136,6 +165,9 @@ whisper_model() {
 check_all() {
   log "4/4 проверка"
   local fails=0
+  # локальный Bot API проверяем, только если заданы ключи
+  local tg=0; grep -q '^TELEGRAM_API_ID=.' .env && grep -q '^TELEGRAM_API_HASH=.' .env && tg=1
+  export TG_CONTAINERS=""; [ $tg = 1 ] && TG_CONTAINERS="telegram-bot-api telegram-bot-api-proxy"
   chk() { # chk "имя" команда...
     local name="$1"; shift
     if out=$(timeout 90 "$@" 2>&1 </dev/null); then  # </dev/null: шимы (docker exec -i) иначе съедают stdin
@@ -144,7 +176,7 @@ check_all() {
       echo "  ❌ $name: $(printf '%s' "$out" | tail -n 2)"; fails=$((fails+1))
     fi
   }
-  chk "контейнеры"          sh -c 'for c in n8n-app n8n-worker n8n-postgres n8n-redis n8n-traefik n8n-tools n8n-media-render edge-tts searxng sandbox-api sandbox-runner-1 telegram-bot-api telegram-bot-api-proxy faster-whisper; do docker inspect -f "{{.State.Running}}" "$c" 2>/dev/null | grep -q true || { echo "не запущен: $c"; exit 1; }; done; echo "все запущены"'
+  chk "контейнеры"          sh -c 'for c in n8n-app n8n-worker n8n-postgres n8n-redis n8n-traefik n8n-tools n8n-media-render edge-tts searxng sandbox-api sandbox-runner-1 faster-whisper $TG_CONTAINERS; do docker inspect -f "{{.State.Running}}" "$c" 2>/dev/null | grep -q true || { echo "не запущен: $c"; exit 1; }; done; echo "все запущены"'
   chk "n8n healthz"         docker exec n8n-app wget -qO- http://localhost:5678/healthz
   chk "remotion (шим)"      sh -c "./shims/remotion --help | head -n 1"
   chk "render-html (шим)"   ./shims/render-html --version
@@ -152,14 +184,17 @@ check_all() {
   chk "edge-tts из n8n"     docker exec n8n-app wget -qO- http://edge-tts:5050/v1/models
   chk "searxng из n8n"      docker exec n8n-app wget -qO- 'http://searxng:8080/search?q=n8n&format=json'
   chk "sandbox из n8n"      docker exec n8n-app wget -qO- http://sandbox-api:8080/healthz
-  chk "telegram-bot-api"    sh -c 'docker exec n8n-app wget -S -O- http://telegram-bot-api:8081 2>&1 | grep -q "HTTP/1.1 404" && echo "HTTP 404 OK"'
-  chk "telegram-bot-api-proxy" sh -c 'docker exec n8n-app wget -S -O- http://telegram-bot-api-proxy/ 2>&1 | grep -q "HTTP/1.1 404" && echo "HTTP 404 OK (прокси → Bot API)"'
-  chk "telegram тома n8n"   docker exec n8n-app sh -c 'test -d /data/telegram-files && test -d /var/lib/telegram-bot-api && echo "смонтированы"'
+  [ $tg = 1 ] && chk "telegram-bot-api"    sh -c 'docker exec n8n-app wget -S -O- http://telegram-bot-api:8081 2>&1 | grep -q "HTTP/1.1 404" && echo "HTTP 404 OK"'
+  [ $tg = 1 ] && chk "telegram-bot-api-proxy" sh -c 'docker exec n8n-app wget -S -O- http://telegram-bot-api-proxy/ 2>&1 | grep -q "HTTP/1.1 404" && echo "HTTP 404 OK (прокси → Bot API)"'
+  [ $tg = 1 ] && chk "telegram тома n8n"   docker exec n8n-app sh -c 'test -d /data/telegram-files && test -d /var/lib/telegram-bot-api && echo "смонтированы"'
   chk "faster-whisper из n8n" docker exec n8n-app wget -qO- http://faster-whisper:8000/health
   chk "whisper модель"      sh -c 'm=$(grep "^WHISPER_MODEL=" .env | cut -d= -f2-); docker exec faster-whisper curl -sf "http://localhost:8000/v1/models/$m" >/dev/null && echo "$m скачана"'
   chk "шимы внутри n8n-app" docker exec n8n-app sh -c 'ls /opt/shims/render-html /opt/shims/remotion /opt/shims/edge-tts /opt/shims/whisper'
   chk "NO_PROXY в n8n-app"  docker exec n8n-app sh -c 'echo "$NO_PROXY" | grep -q faster-whisper && echo "$NO_PROXY" | grep -q telegram-bot-api && echo "$NO_PROXY" | grep -q edge-tts && echo "$NO_PROXY" | grep -q searxng && echo "$NO_PROXY" | grep -q sandbox-api && echo "$NO_PROXY"'
   chk "уборка (cron)"       sh -c 'test -f /etc/cron.d/n8n-data-cleanup && bash scripts/cleanup_data.sh | tail -n 1'
+  chk "kraft-reel (шим)"    sh -c './shims/kraft-reel --version 2>&1 | head -n 1'
+  chk "montage-v2 (шим)"    sh -c './shims/montage-v2 catalog 2>&1 | head -c 120; echo'
+  chk "браузер HyperFrames" sh -c "ls data/files/hf-browser/chrome-headless-shell/linux-${HF_CHROME}/chrome-headless-shell-linux64/chrome-headless-shell"
   chk "коллекция шрифтов"   sh -c 'docker exec n8n-media-render sh -c "fc-list | grep -c /usr/share/fonts/n8n/" && docker exec n8n-app test -f /opt/fonts/fonts.json && echo "/opt/fonts в n8n"'
   chk "шрифты каруселей"    sh -c 'test -f data/studio-engine/public/fonts/fonts.css && ls data/studio-engine/public/fonts/*.woff2 | wc -l'
   if [ -f data/studio-engine/src/index.ts ]; then
