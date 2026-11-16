@@ -34,6 +34,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     procps \
     unzip \
+    libatomic1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Шрифты: в образе копия коллекции; на сервере поверх монтируется /opt/n8n-install/fonts (там же custom/).
