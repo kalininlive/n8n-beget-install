@@ -114,6 +114,10 @@ flowchart LR
 | **kraft-reel** | 0.4.0 | стиль «Крафт» + чистка голосовых (`voice-cut`) |
 | **montage-v2** | 0.5.4 | гибридный монтаж: говорящая голова + графика, 17 стилей, EDL-нарезка пауз, QA-инспектор |
 
+### 🔤 Шрифты
+
+**62 семейства с кириллицей** (Inter, Montserrat, Unbounded, Golos Text, Manrope, Rubik, Playfair Display, Caveat, JetBrains Mono…), все начертания от тонкого до сверхжирного. В n8n и движках — по пути **`/opt/fonts`**, а Chromium, HyperFrames, Remotion и ffmpeg видят их просто по имени. Каталог для агентов — `/opt/fonts/fonts.json`, свои шрифты — в `fonts/custom/`. Подробно: [fonts/README.md](fonts/README.md).
+
 ### Речь и озвучка
 
 | Сервис | Образ | Роль |
@@ -242,6 +246,7 @@ docker compose build n8n-media-render && docker compose up -d n8n-media-render
 ├── beget/                             # набор GENESIS для серверов с шаблоном Beget (/opt/beget/n8n)
 ├── workflows/                         # mcarousel-genesis.json, sync-assets-s3.json
 ├── docs/img/                          # картинки README
+├── fonts/                             # коллекция шрифтов → /opt/fonts (fonts.list в git, файлы качает scripts/install-fonts.sh)
 ├── edge-tts-custom/, telegram-bot-api/, searxng-settings.yml
 ├── bot/                               # админ-бот Telegram
 ├── scripts/                           # cleanup_data.sh, cron_backup.sh

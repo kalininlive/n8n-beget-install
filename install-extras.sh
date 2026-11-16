@@ -85,6 +85,13 @@ prepare_files() {
     cp -f engines/html-render/fonts/*.woff2 engines/html-render/fonts/fonts.css data/studio-engine/public/fonts/
     log "  шрифты: $(ls engines/html-render/fonts/*.woff2 | wc -l) woff2 + fonts.css → data/studio-engine/public/fonts/"
   fi
+  # коллекция шрифтов /opt/fonts (fonts/fonts.list → fonts/google); качаем, если ещё нет или список новее каталога
+  mkdir -p fonts/custom
+  if [ ! -f fonts/fonts.json ] || [ fonts/fonts.list -nt fonts/fonts.json ]; then
+    bash scripts/install-fonts.sh || log "  ⚠ шрифты не скачались (сеть?) — повторить: bash scripts/install-fonts.sh"
+  else
+    log "  коллекция шрифтов уже есть ($(grep -o '"family"' fonts/fonts.json | wc -l) семейств)"
+  fi
 }
 
 # ---------- 3. Запуск сервисов ----------
@@ -105,6 +112,7 @@ start_services() {
     docker compose build n8n-media-render
   fi
   docker compose up -d n8n-media-render
+  docker exec n8n-media-render fc-cache -f >/dev/null 2>&1 && log "  fc-cache: шрифты /opt/fonts проиндексированы" || true
   if [ "${NO_PROXY_CHANGED:-0}" = "1" ]; then
     log "  NO_PROXY изменился — пересоздаю n8n и n8n-worker"
     docker compose up -d n8n n8n-worker
@@ -152,6 +160,7 @@ check_all() {
   chk "шимы внутри n8n-app" docker exec n8n-app sh -c 'ls /opt/shims/render-html /opt/shims/remotion /opt/shims/edge-tts /opt/shims/whisper'
   chk "NO_PROXY в n8n-app"  docker exec n8n-app sh -c 'echo "$NO_PROXY" | grep -q faster-whisper && echo "$NO_PROXY" | grep -q telegram-bot-api && echo "$NO_PROXY" | grep -q edge-tts && echo "$NO_PROXY" | grep -q searxng && echo "$NO_PROXY" | grep -q sandbox-api && echo "$NO_PROXY"'
   chk "уборка (cron)"       sh -c 'test -f /etc/cron.d/n8n-data-cleanup && bash scripts/cleanup_data.sh | tail -n 1'
+  chk "коллекция шрифтов"   sh -c 'docker exec n8n-media-render sh -c "fc-list | grep -c /usr/share/fonts/n8n/" && docker exec n8n-app test -f /opt/fonts/fonts.json && echo "/opt/fonts в n8n"'
   chk "шрифты каруселей"    sh -c 'test -f data/studio-engine/public/fonts/fonts.css && ls data/studio-engine/public/fonts/*.woff2 | wc -l'
   if [ -f data/studio-engine/src/index.ts ]; then
     chk "studio-engine (маскот)" sh -c 'test -d data/studio-engine/node_modules && echo "src + node_modules на месте"'

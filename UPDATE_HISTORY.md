@@ -18,6 +18,7 @@
 
 ## 2026-11-16 — актуализация сборки
 - n8n по умолчанию `:latest` (update_n8n.sh собирает с `--pull`); Traefik `v3`.
+- Шрифты: коллекция 62 семейств с кириллицей → /opt/fonts (scripts/install-fonts.sh, fonts/fonts.list), fontconfig в media-render и tools.
 - Движки: Remotion 4.0.544, HyperFrames 0.8.221 (та же версия, что на компьютере владельца), GSAP 3.15.1, puppeteer-core 25.17.0, fontkit 3.0.0.
 - montage-v2 0.5.4 (17 стилей, EDL, audio-prep, QA-инспектор), шим `cleanup-genesis-job`, набор `beget/` для серверов с шаблоном Beget.
 - install.sh спрашивает `TELEGRAM_API_ID/HASH` (локальный Bot API, файлы до 2 ГБ ставится всегда).

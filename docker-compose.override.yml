@@ -12,10 +12,17 @@ services:
     volumes:
       - telegram-bot-data:/data/telegram-files
       - telegram-bot-data:/var/lib/telegram-bot-api:ro
+      # коллекция шрифтов (scripts/install-fonts.sh): /opt/fonts/fonts.json, fonts.css, google/, custom/
+      - /opt/n8n-install/fonts:/opt/fonts:ro
   n8n-worker:
     volumes:
       - telegram-bot-data:/data/telegram-files
       - telegram-bot-data:/var/lib/telegram-bot-api:ro
+      - /opt/n8n-install/fonts:/opt/fonts:ro
+  n8n-tools:
+    volumes:
+      - /opt/n8n-install/fonts:/opt/fonts:ro
+      - /opt/n8n-install/fonts:/usr/share/fonts/n8n:ro   # fontconfig → ffmpeg drawtext/libass видят шрифты по имени
   telegram-bot-api:
     image: aiogram/telegram-bot-api:latest
     container_name: telegram-bot-api
@@ -53,6 +60,8 @@ services:
     volumes:
     - /opt/n8n-install/data:/data
     - /opt/n8n-install/data/studio-engine:/data/studio-engine
+    - /opt/n8n-install/fonts:/opt/fonts:ro
+    - /opt/n8n-install/fonts:/usr/share/fonts/n8n:ro   # fontconfig → Chromium, HyperFrames, Remotion, ffmpeg/libass видят шрифты по имени
     environment:
     - HTTP_PROXY=${PROXY_URL}
     - HTTPS_PROXY=${PROXY_URL}
