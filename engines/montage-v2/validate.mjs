@@ -110,10 +110,28 @@ export function validate(input, words, { duration, render = false } = {}) {
 
   // 3. времена появления: заданные — проверить, недостающие — привязать к словам
   S.forEach((s, i) => fillTimes(i, s, W, warn));
-  // 4. тексты — из речи
+
+  // 3.5. анти-тавтология: kicker и head не должны дублировать друг друга
   S.forEach((s, i) => {
-    const texts = [s.kicker, s.head, s.badge, s.text, s.keyword, ...(s.object?.c === 'checklist' ? s.object.items.map(x => x[0]) : [])].filter(Boolean);
-    for (const t of texts) { const c = coverage(t, W, s.t0, s.t1); if (c < 0.5) warn(i, `"${t}": мало слов из речи (${Math.round(c * 100)}%) — текст должен быть из того, что сказано`); }
+    if (s.kicker && s.head) {
+      const k = s.kicker.toLowerCase().trim().replace(/[.,!?:;«»]/g, '');
+      const h = s.head.toLowerCase().trim().replace(/[.,!?:;«»]/g, '');
+      if (k === h || k.includes(h) || h.includes(k)) {
+        warn(i, `тавтология: kicker "${s.kicker}" и head "${s.head}" дублируют друг друга — сделай kicker категорией (РЕЗУЛЬТАТ, БОЛЬ, ШАГ), а head главным тезисом`);
+      }
+    }
+  });
+
+  // 4. тексты — проверяем привязку к смыслу речи
+  S.forEach((s, i) => {
+    const texts = [s.head, s.badge, s.text, s.keyword, ...(s.object?.c === 'checklist' ? s.object.items.map(x => x[0]) : [])].filter(Boolean);
+    for (const t of texts) {
+      const c = coverage(t, W, s.t0, s.t1);
+      if (c < 0.3) {
+        const fullCov = coverage(t, W, 0, DUR);
+        if (fullCov < 0.25) warn(i, `"${t}": мало слов из речи (${Math.round(c * 100)}%) — текст должен быть по теме сказанного`);
+      }
+    }
   });
   return { ok: true, errors, warnings, plan };
 }

@@ -1,0 +1,27 @@
+{
+  "id": "photo-story",
+  "name": "Photo Story",
+  "status": "approved",
+  "approved": "2026-10-19",
+  "description": "Warm editorial scene cards. User photos must be provided as scene assets; montage-v2 does not create images.",
+  "fits": "Photo-led story inserts",
+  "components": [
+    "talking",
+    "slide_full",
+    "speaker_circle",
+    "speaker_rect",
+    "card_over_blur",
+    "broll_own",
+    "cta"
+  ],
+  "render_scope": "Style is applied to HyperFrames full-screen slide_full scenes. Talking-head, subtitle and B-roll layers retain the reference montage treatment; this engine does not render Remotion mascot or virtual-camera compositions.",
+  "render": {
+    "bg": "linear-gradient(150deg,#F8F1E3,#E9DDC7)",
+    "ink": "#211D18",
+    "surface": "#FFFDF7",
+    "border": "#D2C5AF",
+    "radius": "10px",
+    "shadow": "0 20px 48px rgba(50,35,18,.18)",
+    "texture": "repeating-linear-gradient(0deg,rgba(80,62,40,.035) 0 1px,transparent 1px 5px)"
+  }
+}

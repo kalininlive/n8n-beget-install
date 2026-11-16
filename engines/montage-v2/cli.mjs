@@ -8,6 +8,7 @@
 //       jobDir: plan.json, words.json, speaker.mp4 (+ файлы b-roll из scenes[].src: путь от jobDir или абсолютный /data/...).
 //       stdout {ok, out, duration, ms:{validate,build,hyperframes,ffmpeg,total}, warnings, plan}; прогресс — в stderr.
 //   montage-v2 catalog [--md]
+//   POST /audio-prep → Auphonic (n8n HTTP Bearer credential) + FFmpeg noise cleanup + silence cuts with word retiming.
 //       всё, что должен знать агент-режиссёр: стили, форматы, компоненты, поля, лимиты, иконки, правила, пример (JSON или markdown для промпта).
 //   montage-v2 --version
 //
@@ -18,7 +19,8 @@ import path from 'path';
 import { execFileSync, spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { validate } from './validate.mjs';
-import { build, bgGeq, coverAss } from './render.mjs';
+let _renderMod = null;
+const getRender = async () => (_renderMod || (_renderMod = await import('./render.mjs')));
 import { agentSpec } from './catalog.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -56,10 +58,16 @@ const readJson = f => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } c
 const probeDur = f => +execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', f]).toString().trim();
 const now = () => Date.now();
 
-function skinBg(skin) {
+async function skinBg(skin, styleId = null) {
   fs.mkdirSync(CACHE, { recursive: true });
-  const f = path.join(CACHE, `bg_${[skin.brandLight, skin.brand, skin.brandDeep].join('').replace(/#/g, '')}.png`);
-  if (!fs.existsSync(f)) execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'color=black:s=1080x1920:d=1', '-frames:v', '1', '-vf', bgGeq(skin), f]);
+  const { bgGeq, getStylePalette } = await getRender();
+  const palette = styleId ? getStylePalette(styleId) : null;
+  const light = palette?.bgLight || skin.brandLight;
+  const main = palette?.bgMain || skin.brand;
+  const deep = palette?.bgDeep || skin.brandDeep;
+  const key = styleId ? `style_${styleId}_${[light, main, deep].join('').replace(/#/g, '')}` : `${[light, main, deep].join('').replace(/#/g, '')}`;
+  const f = path.join(CACHE, `bg_${key}.png`);
+  if (!fs.existsSync(f)) { execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'color=black:s=1080x1920:d=1', '-frames:v', '1', '-vf', bgGeq(skin, palette), f]); }
   return f;
 }
 
@@ -68,6 +76,50 @@ async function main() {
   if (!cmd || cmd === '--help' || cmd === '-h') { process.stdout.write(fs.readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1).filter((l, i, a) => a.slice(0, i + 1).every(x => x.startsWith('//'))).map(l => l.replace(/^\/\/ ?/, '')).join('\n') + '\n'); return; }
   if (cmd === '--version') { out({ engine: 'montage-v2', version: VERSION }); return; }
 
+  if (cmd === 'style-next') {
+    const wf = opt('--workflow') || '7';
+    const reqStyle = opt('--style');
+    const order = ['reference','beat-cards','kinetic-promo','agentworld','genesis-mascot-explainer','pro-montage-v3','hyperframes-explainer','photo-story','story-format','clean-ui','newspaper','matrixglitch','pixel8','synthwave','hudscan','chalkboard','lowpoly3d'];
+    const mascotOnly = new Set(['genesis-mascot-explainer']);
+    const allowed = wf === '19' ? order : order.filter((s) => !mascotOnly.has(s));
+
+    const state = process.env.MV2_STYLE_STATE || '/data/files/genesis-video-style-cycle.json';
+    const lock = state + '.lock';
+    fs.mkdirSync(path.dirname(state), { recursive: true });
+    let held = false;
+    for (let i = 0; i < 100; i++) {
+      try { fs.mkdirSync(lock); held = true; break; }
+      catch (e) {
+        if (e.code !== 'EEXIST') throw e;
+        try { if (Date.now() - fs.statSync(lock).mtimeMs > 30000) fs.rmSync(lock, { recursive: true, force: true }); } catch {}
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+      }
+    }
+    if (!held) fail('не удалось получить блокировку общего счётчика стилей за 5 секунд');
+    try {
+      let saved = {};
+      try { saved = JSON.parse(fs.readFileSync(state, 'utf8')) || {}; } catch {}
+      const recent = Array.isArray(saved.recent) ? saved.recent : (saved.style ? [saved.style] : []);
+
+      let style;
+      if (reqStyle && allowed.includes(reqStyle)) {
+        style = reqStyle;
+      } else {
+        const candidates = allowed.filter((s) => !recent.includes(s));
+        const pool = candidates.length > 0 ? candidates : allowed;
+        const randIdx = Math.floor(Math.random() * pool.length);
+        style = pool[randIdx];
+      }
+
+      const updatedRecent = [...recent.filter((s) => s !== style), style].slice(-3);
+      const tmp = state + '.' + process.pid + '.tmp';
+      fs.writeFileSync(tmp, JSON.stringify({ version: 2, style, recent: updatedRecent, workflow: wf, updatedAt: new Date().toISOString() }) + '\n', { mode: 0o600 });
+      fs.rmSync(state, { force: true });
+      fs.renameSync(tmp, state);
+      out({ ok: true, style, workflow: wf, recent: updatedRecent, total: allowed.length });
+    } finally { fs.rmSync(lock, { recursive: true, force: true }); }
+    return;
+  }
   if (cmd === 'catalog') {
     const spec = agentSpec();
     if (!flag('--md')) { out(spec); return; }
@@ -117,7 +169,7 @@ async function main() {
     const skin = v.plan.skinResolved; delete v.plan.skinResolved;
     const wd = path.join(job, 'mv2');
     fs.rmSync(wd, { recursive: true, force: true });
-    const b = build({ plan: v.plan, words, skin, speaker, outDir: wd, bgPng: skinBg(skin), gsap: GSAP });
+    const { build, coverAss, getStylePalette } = await getRender(); const bgPng = await skinBg(skin, v.plan.style); const b = build({ plan: v.plan, words, skin, speaker, outDir: wd, bgPng, gsap: GSAP });
     fs.writeFileSync(path.join(wd, 'plan.resolved.json'), JSON.stringify(v.plan, null, 1));
     T.build = now();
     log(`план ок: ${v.plan.scenes.length} сцен, ${duration} с; ASS ${b.stats.assEvents} событий; слайдов HF: ${b.hfJobs.length}`);
@@ -126,7 +178,7 @@ async function main() {
     for (const id of b.hfJobs) {
       log(`HyperFrames: ${id}`);
       const r = spawnSync('hyperframes', ['render', '-o', path.join(wd, 'slides', `${id}.mp4`), '--no-low-memory-mode', '--workers', workers],
-        { cwd: path.join(wd, 'slides', id), env: { ...process.env, HYPERFRAMES_NO_UPDATE_CHECK: '1' }, encoding: 'utf8', maxBuffer: 64 << 20 });
+        { cwd: path.join(wd, 'slides', id), env: { ...process.env, HYPERFRAMES_NO_UPDATE_CHECK: '1', HYPERFRAMES_BROWSER_PATH: process.env.HYPERFRAMES_BROWSER_PATH || '/usr/bin/chromium' }, encoding: 'utf8', maxBuffer: 64 << 20 });
       fs.writeFileSync(path.join(wd, `hf-${id}.log`), (r.stdout || '') + (r.stderr || ''));
       if (r.status !== 0 || !fs.existsSync(path.join(wd, 'slides', `${id}.mp4`))) fail(`HyperFrames упал на ${id}`, { log: path.join(wd, `hf-${id}.log`), tail: ((r.stdout || '') + (r.stderr || '')).slice(-1500) });
     }
@@ -134,8 +186,9 @@ async function main() {
 
     const outFile = path.resolve(opt('--out', path.join(job, 'montage_v2.mp4')));
     log('ffmpeg: сборка');
+    const mapAudio = b.hasSfx ? '[aout]' : '0:a?';
     const args = ['-hide_banner', '-loglevel', 'error', '-y', ...b.inputs, '-filter_complex_script', path.join(wd, 'filter.txt'),
-      '-map', '[vout]', '-map', '0:a?', '-t', String(duration), '-c:v', 'libx264', '-preset', opt('--preset', 'veryfast'), '-crf', '20', '-pix_fmt', 'yuv420p',
+      '-map', '[vout]', '-map', mapAudio, '-t', String(duration), '-c:v', 'libx264', '-preset', opt('--preset', 'veryfast'), '-crf', '20', '-pix_fmt', 'yuv420p',
       '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', outFile];
     fs.writeFileSync(path.join(wd, 'ffmpeg.args.json'), JSON.stringify(args));
     const r = spawnSync('ffmpeg', args, { encoding: 'utf8', maxBuffer: 64 << 20 });
@@ -145,7 +198,7 @@ async function main() {
     if (opt('--cover')) {
       cover = path.resolve(opt('--cover'));
       const hook = (v.plan.hook || words.slice(0, 4).map(w => w.w).join(' ')).trim();
-      coverAss(hook, skin, path.join(wd, 'cover.ass'));
+      coverAss(hook, skin, path.join(wd, 'cover.ass'), getStylePalette(v.plan.style));
       const rc = spawnSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-ss', '0.1', '-i', speaker, '-frames:v', '1',
         '-vf', `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,ass=${path.join(wd, 'cover.ass')}`, '-q:v', '2', cover], { encoding: 'utf8' });
       if (rc.status !== 0) { v.warnings.push('обложка не собрана: ' + (rc.stderr || '').slice(-300)); cover = null; }
@@ -157,6 +210,6 @@ async function main() {
       warnings: v.warnings, workDir: wd, cover, hook: v.plan.hook || null });
     return;
   }
-  fail(`неизвестная команда "${cmd}" (catalog | validate | render | --version | --help)`);
+  fail(`неизвестная команда "${cmd}" (catalog | style-next | validate | render | --version | --help)`);
 }
 main().catch(e => fail(e.stack || String(e)));

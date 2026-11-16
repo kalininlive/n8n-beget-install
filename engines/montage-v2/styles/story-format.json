@@ -1,0 +1,27 @@
+{
+  "id": "story-format",
+  "name": "Story Format",
+  "status": "approved",
+  "approved": "2026-10-19",
+  "description": "Editorial story cards for a clear hook, development and conclusion. AI image generation is optional and external.",
+  "fits": "Narrative explainers",
+  "components": [
+    "talking",
+    "slide_full",
+    "speaker_circle",
+    "speaker_rect",
+    "card_over_blur",
+    "broll_own",
+    "cta"
+  ],
+  "render_scope": "Style is applied to HyperFrames full-screen slide_full scenes. Talking-head, subtitle and B-roll layers retain the reference montage treatment; this engine does not render Remotion mascot or virtual-camera compositions.",
+  "render": {
+    "bg": "linear-gradient(150deg,#F8F1E3,#E9DDC7)",
+    "ink": "#211D18",
+    "surface": "#FFFDF7",
+    "border": "#D2C5AF",
+    "radius": "12px",
+    "shadow": "0 20px 48px rgba(50,35,18,.18)",
+    "texture": "radial-gradient(rgba(75,55,32,.08) .7px,transparent .7px) 0 0 / 5px 5px"
+  }
+}

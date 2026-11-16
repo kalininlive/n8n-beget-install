@@ -1,0 +1,27 @@
+{
+  "id": "beat-cards",
+  "name": "Beat-Cards",
+  "status": "approved",
+  "approved": "2026-10-19",
+  "description": "One concise card per beat, with a rapid sequence of clear interface-card layouts. Adapted to full-screen explainer scenes in montage-v2.",
+  "fits": "Fast explainers, SaaS and offers",
+  "components": [
+    "talking",
+    "slide_full",
+    "speaker_circle",
+    "speaker_rect",
+    "card_over_blur",
+    "broll_own",
+    "cta"
+  ],
+  "render_scope": "Style is applied to HyperFrames full-screen slide_full scenes. Talking-head, subtitle and B-roll layers retain the reference montage treatment; this engine does not render Remotion mascot or virtual-camera compositions.",
+  "render": {
+    "bg": "#F6F8FC",
+    "ink": "#121827",
+    "surface": "#FFFFFF",
+    "border": "#DDE4EF",
+    "radius": "16px",
+    "shadow": "0 24px 56px rgba(20,32,54,.16)",
+    "texture": "radial-gradient(#CBD5E1 1px, transparent 1px) 0 0 / 28px 28px"
+  }
+}

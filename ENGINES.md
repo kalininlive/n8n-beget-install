@@ -1,5 +1,7 @@
 # ENGINES.md — движки рендера на сервере n8n
 
+> С 27.09.2026 воркфлоу GENESIS перенумерованы (55/56/57 → 19/20/21, 1 START → 3 START и т. д.) — таблица `genesis-n8n/docs/workflow-numbering.md`.
+
 > Оба движка живут в одном контейнере **`n8n-media-render`** (`docker-compose.override.yml` → `Dockerfile.render`).
 > n8n вызывает их из ноды **Execute Command** через шимы `/opt/shims/*` (папка `shims/` репо смонтирована в n8n-app и n8n-worker).
 > Обмен файлами — общий том: на хосте `/opt/n8n-install/data` = в n8n-app **и** в media-render `/data`.
@@ -73,7 +75,7 @@ docker exec -it n8n-media-render sh -lc 'cd /data/studio-engine && npm run typec
 stdout — один JSON: `{ok, engine, jobDir, out, width, height, scale, count, ms, slides:[{html, png, bytes}]}`; при ошибке `{ok:false, error}` и код 1. Прогресс — в stderr (не мешает парсить stdout, если в Execute Command не склеивать `2>&1`).
 
 **Как вызывает n8n** — воркфлоу `56 🎠 [КАРУСЕЛЬ] МОЙ МАСКОТ` (id `c2KPuvgqGy1suliL`, JSON в `workflows/mcarousel-genesis.json`). Вход из бота GENESIS: `/mcarousel` → статус `MCAROUSEL_TEXT` / `MCAROUSEL_LLM` → `1 START GENESIS` → Execute Workflow с `chat_id`, `text`, `status`. Контракт:
-1. LLM-блок как у маскота (Исследователь с Jina/Brave/Supabase → Судья → Копирайтер, либо Адаптер готового текста) → JSON контента (обложка, 3–7 смысловых слайдов, финал, подпись поста) → Арт-директор (стиль из 4, позы маскота, стикеры).
+1. LLM-блок как у маскота (Исследователь с Jina AI Search/Supabase → Судья → Копирайтер, либо Адаптер готового текста) → JSON контента (обложка, 3–7 смысловых слайдов, финал, подпись поста) → Арт-директор (стиль из 4, позы маскота, стикеры).
 2. Code-нода «Сборка HTML и команда рендера»: шаблоны 4 стилей + `_zones.css` вшиты в ноду; на выходе по одному item на слайд с binary HTML. Далее Execute Command `mkdir -p /data/carousel/jobs/<runId>` → Write File `slide_NN.html` (через Write File, а не `echo base64 | …`: у одного аргумента shell лимит 128 KB, 8 слайдов HTML в base64 в него не влезают).
 3. Execute Command `/opt/shims/render-html /data/carousel/jobs/<runId> --quiet </dev/null` → Code: `JSON.parse($json.stdout)` → `slides[].png`.
 4. Read File по каждому PNG → S3 upload `carousel/<runId>/slide_NN.png` (publicRead) → Telegram `sendMediaGroup` по URL. Нюанс: fixedCollection в n8n не принимает массив из expression, поэтому Switch по числу слайдов → ноды «Альбом × N» (N = 2…10, генерируются сборщиком).
@@ -131,7 +133,7 @@ docker exec -it n8n-media-render node /opt/engines/html-render/render.mjs --help
 
 ---
 
-## 3а. Гибридный монтаж — montage-v2 (в разработке)
+## 3а. Гибридный монтаж — montage-v2 (движок и audio-prep)
 
 **Что это.** MONTAGE v2 GENESIS: JSON-план из каталога компонентов (агент-режиссёр) + слова whisper + видео спикера → ролик 1080×1920.
 Сцены без спикера — HyperFrames, остальное — ffmpeg + libass. Код: `engines/montage-v2/` (README там же).
@@ -141,6 +143,12 @@ docker exec -it n8n-media-render node /opt/engines/html-render/render.mjs --help
 шим `montage-v2`. Браузер — общий с kraft-reel: `/data/files/hf-browser` (Chrome for Testing 152.0.7977.30, ставит `npm run deploy:kraft-reel`; в образе нет `unzip`).
 
 **Формат.** `montage-v2 validate plan.json words.json` → `{ok, errors, warnings, plan}`; `montage-v2 render <jobDir>` → `{ok, out, ms, warnings}`.
+
+**Audio-prep для GENESIS workflow 7 (добавлено 19.10.2026).** В томе `.../engine/montage-v2/` работают `audio-prep-service.mjs` и `audio-prep.mjs`; сервис слушает только внутренний порт 3387 контейнера `n8n-media-render` и вызывается HTTP-нодой воркфлоу. Bearer передаётся из n8n credential **«Auphonic API»**, ключ в файлы или образ не копируется. Перед созданием production helper проверяет `/api/user.json`; если аккаунт не подтверждён как бесплатный (`is_paying_user !== false`) или API/квота недоступны — сразу использует локальный FFmpeg, чтобы не расходовать платные кредиты. На подтверждённом бесплатном аккаунте Auphonic чистит и выравнивает голос, затем helper анализирует оригинал/результат, удаляет начальный бесплатный джингл, если синхронизация подтверждена, и вырезает длинные паузы по словам Whisper до дальнейших таймингов и монтажа. Исходное видео сохраняется. Вызов не публикует наружу порт 3387.
+
+Auphonic Free заявляет 2 часа обработки в месяц, но тарификация одного production имеет минимум 3 минуты; учитывайте это при расчёте остатка месячной бесплатной квоты. API сообщает `is_paying_user` и платные credits в user info: если аккаунт платный, helper не запускает production автоматически.
+
+Воркфлоу 7 и 19 используют общую команду `montage-v2 style-next` и счётчик `/data/files/genesis-video-style-cycle.json`, чтобы последовательные автоматические ролики чередовали 17 зарегистрированных стилей. Явно переданный стиль имеет приоритет. Рендер-область каждого пресета описана в `styles/*.json`; исходные 3D-камеры Remotion не включаются автоматически в старый рендерный конвейер.
 
 ---
 
@@ -167,3 +175,39 @@ words.json, voice.*) · `voice-cut <src> <cut.json> --out f.mp3` (куски р�
 - На сервере: `bash /opt/n8n-install/install-extras.sh --check`
 - С ПК: `cd moy-n8n && npm run doctor` (контейнеры, шимы, `NO_PROXY`, тестовый рендер PNG, smoke-рендер Remotion)
 - После обновления n8n `update_n8n.sh` сам прогоняет `remotion --help` / `render-html --help` и пишет в Telegram, если что-то не отвечает.
+
+## Уборка результатов после workflow 7/19
+Успешный workflow 7 вызывает /opt/shims/cleanup-genesis-job для своего каталога задачи только после доставки итогового видео и сохранения ссылок. Успешный workflow 19 удаляет файлы своего рендера/озвучки/props/превью после Telegram send. Периодическая cleanup_data.sh остаётся страховкой для сбоев и незавершённых задач.
+
+## 2026-10-19 — montage-v2 0.5.2
+- Исправлена оценка размера PCM stdout для Auphonic alignment: 8 kHz mono float32 плюс 1 MiB запаса по длительности исходного видео, вместо стандартного 1 MiB для файлов любой длины.
+- Ранее в 0.5.1 добавлены safe-area fitting длинных заголовков и порог отбора B-roll 0.30.
+- Live workflow 7 active/47 нод. Синтетический рендер с длинным заголовком прошёл, временная задача удалена. Реальный Auphonic-запуск после исправления пока не выполнялся.
+
+
+## 2026-10-20 — montage-v2 0.5.4 assets
+- `engines/montage-v2/fonts/`: объединённые reference шрифты Unbounded Black/ExtraBold и Inter Regular/Bold/ExtraBold с OFL notices; renderer задаёт `fontsdir` для libass и копирует файлы в HyperFrames slide assets.
+- `engines/montage-v2/hyperframes/components/`: переданы 236 component HTML и `registry-item.json` из проекта-референса. Это библиотека исходников для явного подключения при разработке scene; renderer не исполняет весь каталог автоматически.
+- Выкатка на `n8n-media-render`: workflow 7 синтетически проверен, Beat-Cards captions и HyperFrames `slide_full` отрисованы; workflow active.
+
+## 2026-10-20 — montage-v2 0.5.5 (EDL, snapToVoice, VideoProfile, QA-инспектор)
+- **Точная нарезка пауз (`edit-edl.mjs`):**
+  - Алгоритм `snapToVoice` прижимает границы слов Whisper к фактической огибающей речи, удаляя искусственно растянутую тишину на краях слов.
+  - Адаптивный RMS-порог тишины ($p_{10} + 0.35 \times (p_{95} - p_{10})$) рассчитывается по 10-мс окнам звука, устраняя проблему комнатного шума и несрабатывания жесткого порога `-35 dB`.
+  - Нарезка пауз >0.18 с до 0.10 с (0.22 с после завершения предложений) и сквозной пересчет таймкодов всех слов субтитров.
+- **Профили холста и Safe Zones (`video-profile.mjs`):**
+  - Поддержка профилей `vertical-9x16-v1` (1080×1920), `vertical-9x16-720p`, `landscape-16x9-v1`, `square-1x1-v1`.
+  - Защитные зоны интерфейсов соцсетей (верх 180px, правая колонка кнопок 160px, нижняя плашка описания 420px) и отдельная зона субтитров.
+  - Геометрическая валидация `validateLayoutBounds` против вылета элементов за безопасные границы.
+- **Визуальный QA-инспектор (`qa-inspector.mjs`):**
+  - Расчет контрольных таймкодов по сценам (`planInspectionTimestamps`), генерация контакт-листа (`buildContactSheet` через FFmpeg `xstack`).
+  - Структурированный промпт для Vision QA модели с типизированным обнаружением артефактов (`text_clipped`, `outside_safe_area`, `overlap`, `face_obscured`).
+- **Ротация стилей (`cli.mjs style-next`):**
+  - Исключение стиля маскота `genesis-mascot-explainer` для Workflow 7 (закреплен за Workflow 19).
+  - Скользящее окно истории (последние 3 стиля) с атомарной блокировкой для исключения дублирования стиля в двух видео подряд.
+  - Оптимизация запуска CLI (lazy-load тяжелых модулей без зависимости от `fontkit`).
+- **Статус выкатки:**
+  - Развёрнуто на сервере в `/opt/n8n-install/data/files/montage-v2/engine/montage-v2/`.
+  - Контейнер `n8n-media-render` перезапущен.
+  - Сервис `audio-prep` верифицирован через вызов из `n8n-app` (HTTP 401 unauth при запросе без токена).
+  - 10 unit-тестов модуля `montage-v2` успешно пройдены (100% pass).

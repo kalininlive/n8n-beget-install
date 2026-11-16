@@ -20,7 +20,7 @@ export const COMPONENTS = {
   card_over_blur: { dur: [3, 8],     fields: {}, obj: ['checklist'],
     use: 'перечисление, шаги, возможности: спикер размыт, белая карточка с чек-листом, пункты появляются, когда произнесены' },
   broll_own:      { dur: [2, 5],     fields: { query: 'query' }, obj: null,
-    use: 'показать процесс/предмет: ролик из базы клиента на весь кадр; query — что искать по смыслу (3–6 слов)' },
+    use: 'показать процесс/предмет: ролик из базы клиента на весь кадр (не использовать для формата expert; ролик спикера монтируется через моушн-сцены)' },
   cta:            { dur: [3, 8],     fields: { text: 'text', keyword: 'keyword' }, obj: null,
     use: 'финальный призыв, всегда последняя сцена до конца ролика: text — призыв, keyword — кодовое слово в плашке' },
 };
@@ -57,7 +57,7 @@ export const SKINS_DIR = path.join(HERE, 'skins');
 // Всё, что нужно агенту-режиссёру: n8n кладёт это в системный промпт (JSON или markdown).
 export function agentSpec() {
   return {
-    styles: Object.values(STYLES).filter(s => s.status === 'approved').map(({ id, name, description, fits, components }) => ({ id, name, description, fits, components })),
+    styles: Object.values(STYLES).filter(s => s.status === 'approved').map(({ id, name, description, fits, components, render_scope }) => ({ id, name, description, fits, components })),
     formats: Object.values(FORMATS).map(({ id, name, style, description, components }) => ({ id, name, style, description, components })),
     components: Object.fromEntries(Object.entries(COMPONENTS).map(([id, c]) => [id, { duration: c.dur, fields: c.fields, object: c.obj, objectOptional: !!c.objOptional, use: c.use }])),
     objects: Object.fromEntries(Object.entries(OBJECTS).map(([id, o]) => [id, { items: o.items, use: o.use }])),

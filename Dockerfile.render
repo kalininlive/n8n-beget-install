@@ -38,15 +38,15 @@ ENV CHROMIUM_PATH=/usr/bin/chromium
 ENV HYPERFRAMES_NO_UPDATE_CHECK=1
 
 # Движок маскота (Remotion CLI глобально; сам проект живёт в томе /data/studio-engine)
-# Версии закреплены = текущее состояние сервера (проект studio-engine на 4.0.515 совместим). Поднимать осознанно.
-ARG REMOTION_VERSION=4.0.521
-ARG HYPERFRAMES_VERSION=0.8.30
+# Версии = актуальные на 2026-11-16 (Remotion 4.0.544, HyperFrames 0.9.56). Откат: поменять ARG и пересобрать n8n-media-render. Проект studio-engine — той же мажорной серии Remotion.
+ARG REMOTION_VERSION=4.0.544
+ARG HYPERFRAMES_VERSION=0.9.56
 RUN npm install -g @remotion/cli@${REMOTION_VERSION} remotion@${REMOTION_VERSION} hyperframes@${HYPERFRAMES_VERSION}
 
 # GSAP по умолчанию: локально, без CDN (у контейнера интернет только через прокси, networkidle0 ждёт внешние скрипты)
 #   HTML (render-html, hyperframes): <script src="file:///opt/engines/vendor/gsap/gsap.min.js"></script> (+ плагины из той же папки)
 #   Node (require/import 'gsap'):    через NODE_PATH
-ARG GSAP_VERSION=3.15.0
+ARG GSAP_VERSION=3.15.1
 RUN npm install -g gsap@${GSAP_VERSION} \
     && mkdir -p /opt/engines/vendor \
     && ln -s /usr/local/lib/node_modules/gsap/dist /opt/engines/vendor/gsap \

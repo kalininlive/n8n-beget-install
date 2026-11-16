@@ -1,0 +1,27 @@
+{
+  "id": "agentworld",
+  "name": "AgentWorld",
+  "status": "approved",
+  "approved": "2026-10-19",
+  "description": "Dark technical world and glass UI cards in full-screen scenes. The original Remotion virtual camera is not used by montage-v2.",
+  "fits": "Automation explainers",
+  "components": [
+    "talking",
+    "slide_full",
+    "speaker_circle",
+    "speaker_rect",
+    "card_over_blur",
+    "broll_own",
+    "cta"
+  ],
+  "render_scope": "Style is applied to HyperFrames full-screen slide_full scenes. Talking-head, subtitle and B-roll layers retain the reference montage treatment; this engine does not render Remotion mascot or virtual-camera compositions.",
+  "render": {
+    "bg": "radial-gradient(ellipse at 50% 20%,#19396B,#07101D 68%)",
+    "ink": "#F4F8FF",
+    "surface": "rgba(14,31,54,.88)",
+    "border": "rgba(87,170,255,.65)",
+    "radius": "28px",
+    "shadow": "0 30px 70px rgba(0,0,0,.5),0 0 28px rgba(65,160,255,.18)",
+    "texture": "linear-gradient(135deg,rgba(68,145,255,.08) 1px,transparent 1px) 0 0 / 54px 54px"
+  }
+}

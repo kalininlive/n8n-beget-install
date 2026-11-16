@@ -13,3 +13,5 @@ RUN apk add --no-cache \
     bash \
     docker-cli \
     x264-libs
+# без entrypoint образа: compose задаёт command sleep infinity
+ENTRYPOINT []

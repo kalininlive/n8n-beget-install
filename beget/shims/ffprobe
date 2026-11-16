@@ -1,0 +1,3 @@
+#!/bin/sh
+# Beget-сборка: ffprobe есть в образе n8n (в отличие от stack-v2, где он в n8n-tools)
+exec /usr/bin/ffprobe "$@"

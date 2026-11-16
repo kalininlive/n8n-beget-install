@@ -1,0 +1,27 @@
+{
+  "id": "hudscan",
+  "name": "HudScan",
+  "status": "approved",
+  "approved": "2026-10-19",
+  "description": "Technical scan grid with cyan instrument-panel accents.",
+  "fits": "Technical process explainers",
+  "components": [
+    "talking",
+    "slide_full",
+    "speaker_circle",
+    "speaker_rect",
+    "card_over_blur",
+    "broll_own",
+    "cta"
+  ],
+  "render_scope": "Style is applied to HyperFrames full-screen slide_full scenes. Talking-head, subtitle and B-roll layers retain the reference montage treatment; this engine does not render Remotion mascot or virtual-camera compositions.",
+  "render": {
+    "bg": "radial-gradient(ellipse at 50% 25%,#0B3454,#06131E 72%)",
+    "ink": "#E6FBFF",
+    "surface": "rgba(5,26,40,.88)",
+    "border": "#35D8F2",
+    "radius": "12px",
+    "shadow": "0 22px 52px rgba(0,0,0,.44),0 0 24px rgba(53,216,242,.16)",
+    "texture": "linear-gradient(rgba(53,216,242,.09) 1px,transparent 1px) 0 0 / 100% 44px,linear-gradient(90deg,rgba(53,216,242,.08) 1px,transparent 1px) 0 0 / 44px 100%"
+  }
+}

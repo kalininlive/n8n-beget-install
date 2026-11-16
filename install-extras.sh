@@ -92,7 +92,13 @@ start_services() {
   log "3/4 запуск сервисов из docker-compose.override.yml"
   docker compose up -d sandbox-certs
   docker wait sandbox-certs >/dev/null 2>&1 || true
-  docker compose up -d sandbox-api sandbox-runner-1 searxng edge-tts telegram-bot-api telegram-bot-api-proxy faster-whisper n8n-tools
+  docker compose up -d sandbox-api sandbox-runner-1 searxng edge-tts faster-whisper n8n-tools
+  # локальный Bot API — только с API_ID/HASH (у клиента свои с my.telegram.org), иначе контейнер крутится в перезапусках
+  if grep -q '^TELEGRAM_API_ID=.' .env && grep -q '^TELEGRAM_API_HASH=.' .env; then
+    docker compose up -d telegram-bot-api telegram-bot-api-proxy
+  else
+    log "  ⚠ TELEGRAM_API_ID/HASH пустые — telegram-bot-api не запускаю (вписать в .env и повторить install-extras.sh)"
+  fi
   whisper_model
   if ! docker image inspect n8n-install-n8n-media-render:latest >/dev/null 2>&1; then
     log "  сборка образа n8n-media-render (5-10 минут)..."

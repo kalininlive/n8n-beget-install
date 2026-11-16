@@ -1,0 +1,27 @@
+{
+  "id": "matrixglitch",
+  "name": "MatrixGlitch",
+  "status": "approved",
+  "approved": "2026-10-19",
+  "description": "Dark green scanline and grid accents with high-contrast interface cards.",
+  "fits": "Cybersecurity and automation",
+  "components": [
+    "talking",
+    "slide_full",
+    "speaker_circle",
+    "speaker_rect",
+    "card_over_blur",
+    "broll_own",
+    "cta"
+  ],
+  "render_scope": "Style is applied to HyperFrames full-screen slide_full scenes. Talking-head, subtitle and B-roll layers retain the reference montage treatment; this engine does not render Remotion mascot or virtual-camera compositions.",
+  "render": {
+    "bg": "radial-gradient(ellipse at 50% 20%,#073E2A,#03130E 72%)",
+    "ink": "#E7FFE9",
+    "surface": "rgba(3,28,19,.92)",
+    "border": "#39FF88",
+    "radius": "8px",
+    "shadow": "0 22px 54px rgba(0,0,0,.55),0 0 22px rgba(57,255,136,.16)",
+    "texture": "linear-gradient(rgba(57,255,136,.08) 1px,transparent 1px) 0 0 / 100% 8px"
+  }
+}

@@ -4,6 +4,9 @@
 //   slides/<id>/index.html, graphics.ass, mask_spk.ass, filter.txt и возвращает { inputs, hfJobs, stats }.
 // Код перенесён из пилота pilot/montage-v2/hybrid/build.mjs; на плане эталона даёт тот же кадр.
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { STYLES } from './catalog.mjs';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
@@ -15,12 +18,14 @@ const f2 = v => Math.round(v * 100) / 100;
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 // ---------- шрифты (метрики через fontkit, чтобы libass совпал с CSS) ----------
-const FD = process.env.MV2_FONTS || '/usr/share/fonts/opentype/inter/';
+const FD = process.env.MV2_FONTS || fileURLToPath(new URL('./fonts/', import.meta.url));
+const SFX_DIR = process.env.MV2_SFX || fileURLToPath(new URL('./sfx/', import.meta.url));
 const FONTS = {
-  disp900: { file: FD + 'InterDisplay-Black.otf', name: 'Inter Display Black', b: 0 },
-  disp800: { file: FD + 'InterDisplay-ExtraBold.otf', name: 'Inter Display Extra Bold', b: 0 },
-  inter800: { file: FD + 'Inter-ExtraBold.otf', name: 'Inter Extra Bold', b: 0 },
-  inter700: { file: FD + 'Inter-Bold.otf', name: 'Inter', b: 1 },
+  disp900: { file: path.join(FD, 'Unbounded-Black.ttf'), name: 'Unbounded', b: 1 },
+  disp800: { file: path.join(FD, 'Unbounded-ExtraBold.ttf'), name: 'Unbounded', b: 1 },
+  inter800: { file: path.join(FD, 'Inter-ExtraBold.ttf'), name: 'Inter', b: 1 },
+  inter700: { file: path.join(FD, 'Inter-Bold.ttf'), name: 'Inter', b: 1 },
+  inter400: { file: path.join(FD, 'Inter-Regular.ttf'), name: 'Inter', b: 0 },
 };
 for (const f of Object.values(FONTS)) {
   const fk = fontkit.openSync(f.file);
@@ -219,9 +224,51 @@ const ICON_SVG = {
   target: svg('#FF4D4F', '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/>'),
 };
 
+export const STYLE_CAPTIONS = {
+  'beat-cards': { fill: '#FFFFFF', text: '#121827', accent: '#1E6BFF', every: 1, radius: 18 },
+  'agentworld': { fill: '#0E1F36', text: '#F4F8FF', accent: '#57AAFF', every: 2, radius: 12 },
+  'kinetic-promo': { fill: '#1C1842', text: '#FFFFFF', accent: '#FF2DBE', every: 2, radius: 20 },
+  'genesis-mascot-explainer': { fill: '#09233A', text: '#FFFFFF', accent: '#42D6FF', every: 2, radius: 18 },
+  'pro-montage-v3': { fill: '#101114', text: '#FFFFFF', accent: '#FFD43B', every: 2, radius: 10 },
+  'hyperframes-explainer': { fill: '#101820', text: '#FFFFFF', accent: '#45E0C1', every: 2, radius: 14 },
+  'story-format': { fill: '#282019', text: '#FFF6E8', accent: '#E6B978', every: 2, radius: 6 },
+  'photo-story': { fill: '#17202A', text: '#FFFFFF', accent: '#E7B48A', every: 2, radius: 24 },
+  'clean-ui': { fill: '#FFFFFF', text: '#111827', accent: '#2563EB', every: 2, radius: 10 },
+  'newspaper': { fill: '#FFF9EA', text: '#201B14', accent: '#9E3328', every: 2, radius: 2 },
+  'matrixglitch': { fill: '#03130E', text: '#E7FFE9', accent: '#39FF88', every: 2, radius: 2 },
+  'pixel8': { fill: '#211A46', text: '#FFF36D', accent: '#FF4FD8', every: 2, radius: 0 },
+  'synthwave': { fill: '#21123D', text: '#FFFFFF', accent: '#FF55C8', every: 2, radius: 16 },
+  'hudscan': { fill: '#071D26', text: '#D8FCFF', accent: '#28E7F2', every: 2, radius: 4 },
+  'chalkboard': { fill: '#173F31', text: '#FFFBEA', accent: '#F5E8A8', every: 2, radius: 3 },
+  'lowpoly3d': { fill: '#17223A', text: '#FFFFFF', accent: '#FFB84D', every: 2, radius: 8 },
+  'reference': { fill: null, text: null, accent: null, every: 3, radius: 20 },
+};
+
+export function getStylePalette(styleId) {
+  const style = STYLES[styleId];
+  const render = style?.render;
+  const caption = STYLE_CAPTIONS[styleId] || STYLE_CAPTIONS.reference;
+  if (!render) return null;
+  const hexes = (render.bg?.match(/#[0-9a-fA-F]{6}/g) || []);
+  const shadowHex = render.shadow?.match(/#[0-9a-fA-F]{6}/)?.[0];
+  const bgLight = hexes[1] || hexes[0] || render.surface || '#24205B';
+  const bgMain = hexes[0] || render.surface || '#100D35';
+  const bgDeep = hexes[2] || shadowHex || hexes[1] || hexes[0] || render.surface || '#08071F';
+  const accent = caption.accent || render.border || '#F6D743';
+  const ink = render.ink || caption.text || '#FFFFFF';
+  const surface = render.surface || '#24205B';
+  const border = render.border || accent;
+  const radius = render.radius !== undefined ? (parseInt(render.radius) || 0) : 18;
+  return { bgLight, bgMain, bgDeep, accent, ink, surface, border, radius, caption };
+}
+
 // ================= сборка =================
 export function build({ plan, words, skin: SKIN, speaker, outDir, bgPng, gsap }) {
   const DUR = plan.duration, WORDS = words, scenes = plan.scenes;
+  const STYLE_ID = plan.style || 'reference';
+  const slideTheme = STYLES[STYLE_ID]?.render || null;
+  const captionTheme = STYLE_CAPTIONS[STYLE_ID] || STYLE_CAPTIONS.reference;
+  const palette = getStylePalette(STYLE_ID);
   fs.mkdirSync(outDir, { recursive: true });
   const G = makeAss(W, H);
 
@@ -229,17 +276,17 @@ export function build({ plan, words, skin: SKIN, speaker, outDir, bgPng, gsap })
   function subtitleZones() {
     const zones = [];
     for (const s of scenes) {
-      if (s.c === 'talking') zones.push({ from: s.t0, to: s.t1, top: 250 });
-      if (s.c === 'broll_own') zones.push({ from: s.t0, to: s.t1, top: 1180 });
-      if (s.c === 'cta') { zones.push({ from: s.t0, to: s.at, top: 1180 }); zones.push({ from: s.at, to: s.t1, top: 1250 }); }
+      if (s.c === 'talking') zones.push({ from: s.t0, to: s.t1, top: 1360 });
+      if (s.c === 'broll_own') zones.push({ from: s.t0, to: s.t1, top: 1360 });
+      if (s.c === 'cta') { zones.push({ from: s.t0, to: s.at, top: 1360 }); zones.push({ from: s.at, to: s.t1, top: 1400 }); }
     }
     const merged = [];
     for (const z of zones) { const l = merged[merged.length - 1]; if (l && l.top === z.top && Math.abs(l.to - z.from) < 1e-6) l.to = z.to; else merged.push({ ...z }); }
     return merged;
   }
   function buildSubtitles() {
-    const small = { font: FONTS.inter800, size: 58 };
-    const acc = { font: FONTS.disp900, size: 128, lh: 128 * 0.95, ls: -0.02 * 128 };
+    const small = { font: FONTS.inter800, size: 50 };
+    const acc = { font: FONTS.disp900, size: 96, lh: 96 * 0.95, ls: -0.02 * 96 };
     const shadow = { dx: 0, dy: 4, blur: 7, op: 0.55 };
     let chunkN = 0;
     for (const z of subtitleZones()) {
@@ -254,7 +301,7 @@ export function build({ plan, words, skin: SKIN, speaker, outDir, bgPng, gsap })
       chunks.forEach((c, ci) => {
         const end = ci < chunks.length - 1 ? chunks[ci + 1][0].t : Math.min(z.to, c[c.length - 1].e + 0.4);
         const accI = c.reduce((b, w, i) => (w.w.length > c[b].w.length ? i : b), 0);
-        const pill = chunkN % 3 === 1;
+        const pill = chunkN % captionTheme.every === (captionTheme.every === 1 ? 0 : 1);
         // элементы строки (inline-block) и блочный акцент
         const items = c.map((w, i) => {
           if (i !== accI) {
@@ -264,13 +311,22 @@ export function build({ plan, words, skin: SKIN, speaker, outDir, bgPng, gsap })
             return { w, text, kind: 'small', width: tw + 16, height: h, above: small.font.asc * small.size };
           }
           const text = w.w.toUpperCase();
-          const inner = (acc.lh - (acc.font.asc + acc.font.desc) * acc.size) / 2 + acc.font.asc * acc.size;
-          // перенос внутри акцента, как в браузере (whisper бывает отдаёт «КОММЕН ТАРИЯХ» одним словом)
-          const maxW = pill ? 960 - 56 : 960, lines = wrap(acc.font, acc.size, text, maxW, acc.ls);
-          const lws = lines.map(l => textW(acc.font, acc.size, l, acc.ls)), lw = Math.max(...lws), n = lines.length;
-          const last = (n - 1) * acc.lh + inner; // baseline inline-block = последняя строка
-          if (pill) return { w, text, lines, lws, kind: 'pill', tw: lw, width: lw + 56, height: 6 + 4 + n * acc.lh + 10 + 6, above: 6 + 4 + last };
-          return { w, text, lines, lws, kind: 'block', tw: lw, width: 960, height: n * acc.lh + 12, above: 6 + last };
+          const maxW = pill ? 960 - 56 : 960;
+          let accSize = acc.size;
+          let accLh = acc.lh;
+          let accLs = acc.ls;
+          const singleW = textW(acc.font, accSize, text, accLs);
+          if (singleW > maxW) {
+            accSize = Math.max(54, Math.floor(accSize * (maxW / singleW) * 0.94));
+            accLh = accSize * 0.95;
+            accLs = -0.02 * accSize;
+          }
+          const inner = (accLh - (acc.font.asc + acc.font.desc) * accSize) / 2 + acc.font.asc * accSize;
+          const lines = wrap(acc.font, accSize, text, maxW, accLs);
+          const lws = lines.map(l => textW(acc.font, accSize, l, accLs)), lw = Math.max(...lws), n = lines.length;
+          const last = (n - 1) * accLh + inner; // baseline inline-block = последняя строка
+          if (pill) return { w, text, lines, lws, kind: 'pill', tw: lw, width: lw + 56, height: 6 + 4 + n * accLh + 10 + 6, above: 6 + 4 + last, accSize, accLh, accLs };
+          return { w, text, lines, lws, kind: 'block', tw: lw, width: 960, height: n * accLh + 12, above: 6 + last, accSize, accLh, accLs };
         });
         // раскладка по строкам (ширина 960, по центру)
         const rows = []; let row = [];
@@ -296,11 +352,18 @@ export function build({ plan, words, skin: SKIN, speaker, outDir, bgPng, gsap })
               ox = x + it.width / 2; oy = top + it.height / 2;
               tweens = [{ p: 'a', from: 0, to: 1, t: it.w.t, d: 0.22, e: 'power3.out' }, { p: 'y', from: 30, to: 0, t: it.w.t, d: 0.22, e: 'power3.out' }];
             } else {
-              const n = it.lines.length, boxTop = top + 6, boxH = it.kind === 'pill' ? 4 + n * acc.lh + 10 : n * acc.lh;
-              if (it.kind === 'pill') parts.push({ kind: 'draw', x, y: boxTop, path: rrect(f2(it.width), f2(boxH), 20), color: SKIN.brand });
+              const curLh = it.accLh || acc.lh;
+              const curSize = it.accSize || acc.size;
+              const curLs = it.accLs || acc.ls;
+              const n = it.lines.length, boxTop = top + 6, boxH = it.kind === 'pill' ? 4 + n * curLh + 10 : n * curLh;
+              if (it.kind === 'pill') {
+                const pillColor = captionTheme.fill || SKIN.brand;
+                parts.push({ kind: 'draw', x, y: boxTop, path: rrect(f2(it.width), f2(boxH), captionTheme.radius), color: pillColor });
+                if (captionTheme.accent) parts.push({ kind: 'draw', x: x + 5, y: boxTop + 5, path: rrect(f2(Math.min(8, it.width - 10)), f2(Math.max(8, boxH - 10)), 4), color: captionTheme.accent });
+              }
               it.lines.forEach((ln, li) => {
                 const tx = it.kind === 'pill' ? x + 28 + (it.tw - it.lws[li]) / 2 : 60 + (960 - it.lws[li]) / 2;
-                parts.push(textPart({ font: acc.font, size: acc.size, text: ln, x: tx, lineTop: boxTop + (it.kind === 'pill' ? 4 : 0) + li * acc.lh, lineH: acc.lh, color: SKIN.white, shadow, ls: acc.ls }));
+                parts.push(textPart({ font: acc.font, size: curSize, text: ln, x: tx, lineTop: boxTop + (it.kind === 'pill' ? 4 : 0) + li * curLh, lineH: curLh, color: it.kind === 'pill' ? (captionTheme.text || SKIN.white) : SKIN.white, shadow: it.kind === 'pill' && captionTheme.text ? null : shadow, ls: curLs }));
               });
               ox = it.kind === 'pill' ? x + it.width / 2 : W / 2; oy = boxTop + boxH / 2;
               tweens = [{ p: 'a', from: 0, to: 1, t: it.w.t, d: 0.22, e: 'back.out' }, { p: 'y', from: 30, to: 0, t: it.w.t, d: 0.22, e: 'back.out' },
@@ -318,70 +381,92 @@ export function build({ plan, words, skin: SKIN, speaker, outDir, bgPng, gsap })
 
   // ---------- графика сцен со спикером ----------
   // подводка (kicker): одна строка по центру, длинная — уменьшается до 960
-  const kickerPart = (text, top, color = SKIN.white) => {
+  const kickerPart = (text, top, color = (palette?.ink || SKIN.white)) => {
     const f = FONTS.inter700, sz = fitSize(f, 54, [text], 960);
     return textPart({ font: f, size: sz, text, x: centerX(f, sz, text), lineTop: top, lineH: (f.asc + f.desc) * sz, color });
   };
   function sceneGraphics(s) {
     if (s.c === 'speaker_circle') {
-      G.element({ t0: s.t0, t1: s.t1, parts: [kickerPart(s.kicker, 300)] });
+      const textColor = palette ? palette.ink : SKIN.white;
+      G.element({ t0: s.t0, t1: s.t1, parts: [kickerPart(s.kicker, 300, textColor)] });
       const ht = s.head.toUpperCase(), lsK = -0.02;
       let hs = 118, lines = wrap(FONTS.disp900, hs, ht, 960, lsK * hs);
       hs = fitSize(FONTS.disp900, hs, lines, 960, lsK);
       const ls = lsK * hs, lh = hs * 0.92;
       G.element({ t0: s.head_at, t1: s.t1,
-        parts: lines.map((ln, li) => textPart({ font: FONTS.disp900, size: hs, text: ln, x: centerX(FONTS.disp900, hs, ln, ls), lineTop: 380 + li * lh, lineH: lh, color: SKIN.white, ls, shadow: { dx: 0, dy: 8, blur: 12, op: 0.25 } })),
+        parts: lines.map((ln, li) => textPart({ font: FONTS.disp900, size: hs, text: ln, x: centerX(FONTS.disp900, hs, ln, ls), lineTop: 380 + li * lh, lineH: lh, color: textColor, ls, shadow: { dx: 0, dy: 8, blur: 12, op: 0.25 } })),
         chain: [tr([{ p: 'y', from: 40, to: 0, t: s.head_at, d: 0.3, e: 'power3.out' }, { p: 'a', from: 0, to: 1, t: s.head_at, d: 0.3, e: 'power3.out' }], 0, 0)] });
       if (s.badge) {
         const f = FONTS.disp800, sz = 56, tw = textW(f, sz, s.badge), bw = tw + 52, bh = 12 + (f.asc + f.desc) * sz, bx = W / 2 - bw / 2, by = 520 + (lines.length - 1) * lh;
         const rot = { ox: W / 2, oy: by + bh / 2, deg: 3 };
-        G.element({ t0: s.badge_at, t1: s.t1, parts: [
-          { kind: 'draw', x: bx, y: by, path: rrect(f2(bw), f2(bh), 14), color: SKIN.white, rot },
-          { ...textPart({ font: f, size: sz, text: s.badge, x: bx + 26, lineTop: by + 6, lineH: (f.asc + f.desc) * sz, color: SKIN.brand }), rot }],
+        const badgeBg = palette?.caption?.fill || (palette?.surface?.startsWith('#') ? palette.surface : SKIN.white);
+        const badgeText = palette?.accent || SKIN.brand;
+        const badgeRadius = palette?.radius !== undefined ? Math.min(14, palette.radius || 4) : 14;
+        const bParts = [];
+        if (palette?.border && /^#[0-9a-fA-F]{6}$/.test(palette.border)) {
+          bParts.push({ kind: 'draw', x: bx - 2, y: by - 2, path: rrect(f2(bw + 4), f2(bh + 4), badgeRadius + 2), color: palette.border, rot, op: 0.85 });
+        }
+        bParts.push({ kind: 'draw', x: bx, y: by, path: rrect(f2(bw), f2(bh), badgeRadius), color: badgeBg, rot, op: 0.95 });
+        bParts.push({ ...textPart({ font: f, size: sz, text: s.badge, x: bx + 26, lineTop: by + 6, lineH: (f.asc + f.desc) * sz, color: badgeText }), rot });
+        G.element({ t0: s.badge_at, t1: s.t1, parts: bParts,
           chain: [tr([{ p: 's', from: 0, to: 1, t: s.badge_at, d: 0.35, e: 'back.out' }], W / 2, by + bh / 2)] });
       }
-      // белое кольцо вокруг круга спикера (центр 540,1140; r 330, толщина 10)
-      G.element({ t0: s.t0, t1: s.t1, layer: 0, parts: [{ kind: 'draw', x: 210, y: 810, path: ringPath(330, 10), color: SKIN.white }],
+      // кольцо вокруг круга спикера (центр 540,1140; r 330, толщина 10)
+      const ringColor = palette?.accent || SKIN.white;
+      G.element({ t0: s.t0, t1: s.t1, layer: 0, parts: [{ kind: 'draw', x: 210, y: 810, path: ringPath(330, 10), color: ringColor }],
         chain: [tr([{ p: 's', from: 0, to: 1, t: s.t0 + 0.05, d: 0.5, e: 'back.out' }], 540, 1140)] });
     }
     if (s.c === 'card_over_blur' && s.object.c === 'checklist') {
-      const o = s.object, L = 110, T = 560, CW = 860, PAD = 56;
-      const tf = FONTS.disp900, ts = fitSize(tf, 72, [o.title[0] + o.title[1]], CW - 2 * PAD), tH = (tf.asc + tf.desc) * ts;
+      const o = s.object, L = 90, T = 840, CW = 900, PAD = 50;
+      const tf = FONTS.disp900, ts = fitSize(tf, 64, [o.title[0] + o.title[1]], CW - 2 * PAD), tH = (tf.asc + tf.desc) * ts;
       const parts = [];
       const t1w = textW(tf, ts, o.title[0]);
       const titleTop = T + PAD;
-      parts.push(textPart({ font: tf, size: ts, text: o.title[0], x: L + PAD, lineTop: titleTop, lineH: tH, color: SKIN.ink }));
-      parts.push(textPart({ font: tf, size: ts, text: o.title[1], x: L + PAD + t1w, lineTop: titleTop, lineH: tH, color: SKIN.brand }));
+      const title0Color = '#FFFFFF';
+      const title1Color = palette?.accent || SKIN.brand;
+      parts.push(textPart({ font: tf, size: ts, text: o.title[0], x: L + PAD, lineTop: titleTop, lineH: tH, color: title0Color }));
+      parts.push(textPart({ font: tf, size: ts, text: o.title[1], x: L + PAD + t1w, lineTop: titleTop, lineH: tH, color: title1Color }));
       // пункты
-      const f = FONTS.inter700, sz = 46, lh = (f.asc + f.desc) * sz, avail = CW - 2 * PAD - 70 - 28;
-      let y = titleTop + tH + 30;
+      const f = FONTS.inter700, sz = 42, lh = (f.asc + f.desc) * sz, avail = CW - 2 * PAD - 70 - 28;
+      let y = titleTop + tH + 28;
       const items = o.items.map(([text, at]) => {
         const lines = wrap(f, sz, text, avail);
-        const h = 2 + 22 + Math.max(70, lines.length * lh) + 22;
+        const h = 2 + 18 + Math.max(60, lines.length * lh) + 18;
         const it = { lines, at, top: y, h };
         y += h; return it;
       });
-      const CH = y + 40 - T;
-      const cardChain = tr([{ p: 'y', from: 120, to: 0, t: o.at, d: 0.45, e: 'back.out' }, { p: 'a', from: 0, to: 1, t: o.at, d: 0.45, e: 'back.out' },
-        { p: 's', from: 0.9, to: 1, t: o.at, d: 0.45, e: 'back.out' }], L + CW / 2, T + CH / 2);
-      const bgParts = [{ kind: 'draw', x: L, y: T, path: rrect(CW, f2(CH), 44), color: SKIN.white, op: 0.94, shadow: { dx: 0, dy: 40, blur: 30, op: 0.35 } }];
+      const CH = y + 36 - T;
+      const cardChain = tr([{ p: 'y', from: 80, to: 0, t: o.at, d: 0.4, e: 'back.out' }, { p: 'a', from: 0, to: 1, t: o.at, d: 0.4, e: 'back.out' },
+        { p: 's', from: 0.92, to: 1, t: o.at, d: 0.4, e: 'back.out' }], L + CW / 2, T + CH / 2);
+      const cardBg = palette?.surface && palette.surface.startsWith('#') ? palette.surface : '#141028';
+      const cardRadius = palette?.radius !== undefined ? Math.min(36, Math.max(16, palette.radius)) : 28;
+      const bgParts = [];
+      if (palette?.border && /^#[0-9a-fA-F]{6}$/.test(palette.border)) {
+        bgParts.push({ kind: 'draw', x: L - 3, y: T - 3, path: rrect(CW + 6, f2(CH) + 6, cardRadius + 3), color: palette.border, op: 0.85 });
+      }
+      bgParts.push({ kind: 'draw', x: L, y: T, path: rrect(CW, f2(CH), cardRadius), color: cardBg, op: 0.94, shadow: { dx: 0, dy: 30, blur: 24, op: 0.45 } });
       G.element({ t0: o.at, t1: s.t1, parts: bgParts, chain: [cardChain], layer: 1 });
       G.element({ t0: o.at, t1: s.t1, parts, chain: [cardChain], layer: 2 });
+      const ruleColor = palette?.border && /^#[0-9a-fA-F]{6}$/.test(palette.border) ? palette.border : 'rgba(255,255,255,0.18)';
+      const checkCircleColor = palette?.accent || '#22C55E';
+      const checkIconColor = '#FFFFFF';
+      const itemTextColor = '#FFFFFF';
       for (const it of items) {
-        const ip = [{ kind: 'draw', x: L + PAD, y: it.top, path: `m 0 0 l ${CW - 2 * PAD} 0 l ${CW - 2 * PAD} 2 l 0 2`, color: SKIN.rule }];
-        const inner = it.h - 2 - 44, midY = it.top + 2 + 22 + inner / 2;
-        ip.push({ kind: 'draw', x: L + PAD, y: midY - 35, path: circlePath(35, 35, 35), color: SKIN.brand });
-        ip.push(iconPart('check', L + PAD + 15, midY - 20, 40, SKIN.white));
+        const ip = [{ kind: 'draw', x: L + PAD, y: it.top, path: `m 0 0 l ${CW - 2 * PAD} 0 l ${CW - 2 * PAD} 2 l 0 2`, color: ruleColor, op: 0.6 }];
+        const inner = it.h - 2 - 36, midY = it.top + 2 + 18 + inner / 2;
+        ip.push({ kind: 'draw', x: L + PAD, y: midY - 32, path: circlePath(32, 32, 32), color: checkCircleColor });
+        ip.push(iconPart('check', L + PAD + 14, midY - 18, 36, checkIconColor));
         const textTop = midY - (it.lines.length * lh) / 2;
-        it.lines.forEach((ln, i) => ip.push(textPart({ font: f, size: sz, text: ln, x: L + PAD + 70 + 28, lineTop: textTop + i * lh, lineH: lh, color: SKIN.ink })));
+        it.lines.forEach((ln, i) => ip.push(textPart({ font: f, size: sz, text: ln, x: L + PAD + 64 + 24, lineTop: textTop + i * lh, lineH: lh, color: itemTextColor })));
         G.element({ t0: it.at, t1: s.t1, parts: ip, layer: 2,
-          chain: [tr([{ p: 'x', from: -60, to: 0, t: it.at, d: 0.3, e: 'power3.out' }, { p: 'a', from: 0, to: 1, t: it.at, d: 0.3, e: 'power3.out' }], 0, 0), cardChain] });
+          chain: [tr([{ p: 'x', from: -50, to: 0, t: it.at, d: 0.3, e: 'power3.out' }, { p: 'a', from: 0, to: 1, t: it.at, d: 0.3, e: 'power3.out' }], 0, 0), cardChain] });
       }
     }
-    if (s.c === 'speaker_rect' && !s.object) G.element({ t0: s.t0, t1: s.t1, parts: [kickerPart(s.kicker, 300, SKIN.muted)] });
+    if (s.c === 'speaker_rect' && !s.object) G.element({ t0: s.t0, t1: s.t1, parts: [kickerPart(s.kicker, 300, palette?.accent || SKIN.muted)] });
     if (s.c === 'speaker_rect' && s.object?.c === 'stat_big') {
       const o = s.object;
-      G.element({ t0: s.t0, t1: s.t1, parts: [kickerPart(s.kicker, 300, SKIN.muted)] });
+      const kickerColor = palette?.accent || SKIN.muted;
+      G.element({ t0: s.t0, t1: s.t1, parts: [kickerPart(s.kicker, 300, kickerColor)] });
       const f = FONTS.disp900, sz = fitSize(f, 300, [o.prefix + o.value + o.suffix], 960), top = 390 + (300 - sz) / 2;
       const val = t => (t < o.count_at ? 0 : Math.round(o.value * EASE['power2.out'](Math.min(1, (t - o.count_at) / 1.4))));
       const layout = t => { const num = String(val(t)); const wp = textW(f, sz, o.prefix), wn = textW(f, sz, num), ws = textW(f, sz, o.suffix);
@@ -391,11 +476,13 @@ export function build({ plan, words, skin: SKIN, speaker, outDir, bgPng, gsap })
       const chain = [tr([{ p: 's', from: 0.5, to: 1, t: o.at, d: 0.35, e: 'back.out' }, { p: 'a', from: 0, to: 1, t: o.at, d: 0.35, e: 'back.out' }], W / 2, top + sz / 2)];
       let segStart = o.at, prevNum = layout(o.at).num;
       const n0 = Math.ceil(o.at * FPS), n1 = Math.ceil(s.t1 * FPS);
+      const brandColor = palette ? palette.accent : SKIN.brand;
+      const numColor = palette ? palette.ink : SKIN.white;
       for (let n = n0; n <= n1; n++) {
         const t = n / FPS, L2 = layout(Math.min(t, s.t1 - 1e-6));
         if (L2.num !== prevNum || n === n1) {
           const Lp = layout(segStart);
-          G.element({ t0: segStart, t1: t, chain, parts: [tp(o.prefix, Lp.x0, SKIN.brand), tp(Lp.num, Lp.x0 + Lp.wp, SKIN.white), tp(o.suffix, Lp.x0 + Lp.wp + Lp.wn, SKIN.brand)].filter(p => p.text) });
+          G.element({ t0: segStart, t1: t, chain, parts: [tp(o.prefix, Lp.x0, brandColor), tp(Lp.num, Lp.x0 + Lp.wp, numColor), tp(o.suffix, Lp.x0 + Lp.wp + Lp.wn, brandColor)].filter(p => p.text) });
           segStart = t; prevNum = L2.num;
         }
       }
@@ -417,15 +504,40 @@ export function build({ plan, words, skin: SKIN, speaker, outDir, bgPng, gsap })
   // ---------- HyperFrames: сцены без спикера ----------
   function slideHtml(s) {
     const d = f2(s.t1 - s.t0), rel = t => f2(t - s.t0);
+    // Fit single-word and multi-word headlines to the actual inner width of the card.
+    // CSS does not wrap long unbroken words, so the previous fixed 150px size clipped
+    // Russian headings such as «СМОНТИРОВАЛОСЬ» at the right edge.
+    const headText = String(s.head || '').toUpperCase();
+    const headLsK = -0.02;
+    const headLines = wrap(FONTS.disp900, 150, headText, 936, headLsK * 150);
+    const headSize = fitSize(FONTS.disp900, 150, headLines, 936, headLsK);
+    const kickerText = String(s.kicker || '');
+    const kickerSize = fitSize(FONTS.inter700, 64, [kickerText], 936);
+    const slideCss = slideTheme ? [
+      '#root { color: ' + slideTheme.ink + '; }',
+      '#bg { background: ' + slideTheme.bg + '; }',
+      '#bg::after { content:""; position:absolute; inset:0; background:' + slideTheme.texture + '; opacity:.8; }',
+      '.kicker,.head { color:' + slideTheme.ink + '; text-shadow:' + (['clean-ui','beat-cards','story-format','photo-story','newspaper','chalkboard'].includes(STYLE_ID) ? 'none' : '0 8px 30px rgba(0,0,0,.32)') + '; }',
+      '.card { color:' + slideTheme.ink + '; background:' + slideTheme.surface + '; border:2px solid ' + slideTheme.border + '; border-radius:' + slideTheme.radius + '; box-shadow:' + slideTheme.shadow + '; }',
+      '.card svg { filter:drop-shadow(0 4px 10px rgba(0,0,0,.15)); }',
+] .join('\n') : '';
     const items = s.object?.items || [];
-    const card = (it, i, pos) => `<div class="card abs" id="c${i}" style="${pos}">${ICON_SVG[it[0]]}<p>${esc(it[1]).replace(' ', '<br>')}</p></div>`;
-    const POS = ['left:90px; top:820px', 'left:390px; top:780px', 'left:690px; top:820px'];
-    const top = items.length ? [330, 410] : [700, 780]; // без карточек — тезис по центру кадра
+    const card = (it, i, pos) => {
+      const words = esc(it[1]).split(/\s+/).filter(Boolean);
+      const maxWord = Math.max(...words.map(w => w.length), 0);
+      const fontSize = maxWord > 10 ? 26 : (maxWord > 7 ? 30 : 36);
+      return `<div class="card abs" id="c${i}" style="${pos}"><div class="card-icon">${ICON_SVG[it[0]]}</div><p style="font-size:${fontSize}px">${words.join('<br>')}</p></div>`;
+    };
+    const POS = ['left:45px; top:820px', 'left:385px; top:780px', 'left:725px; top:820px'];
+    const top = items.length ? [330, 410] : [680, 780]; // без карточек — тезис по центру кадра
     const cardTl = items.length ? `
-  .from("#c1", { y: 500, rotation: -30, opacity: 0, duration: 0.45, ease: EB }, ${rel(items[0][2])})
+tl.from("#c1", { y: 500, rotation: -30, opacity: 0, duration: 0.45, ease: EB }, ${rel(items[0][2])})
   .from("#c2", { y: 500, opacity: 0, duration: 0.45, ease: EB }, ${rel(items[1][2])})
   .from("#c3", { y: 500, rotation: 30, opacity: 0, duration: 0.45, ease: EB }, ${rel(items[2][2])})
-  .to("#c1", { rotation: -9, duration: 0.3 }, ${rel(items[0][2] + 0.5)}).to("#c3", { rotation: 9, duration: 0.3 }, ${rel(items[2][2] + 0.5)})` : '';
+  .to("#c1", { rotation: -9, duration: 0.3 }, ${rel(items[0][2] + 0.5)})
+  .to("#c3", { rotation: 9, duration: 0.3 }, ${rel(items[2][2] + 0.5)});` : '';
+    const headAnim = (s.head_at && rel(s.head_at) > 0.25) ? `
+tl.to("#sh", { scale: 1.08, duration: 0.16, yoyo: true, repeat: 1, ease: "power2.out" }, ${rel(s.head_at)});` : '';
     return `<!doctype html>
 <html lang="ru" data-resolution="portrait">
 <head>
@@ -433,36 +545,42 @@ export function build({ plan, words, skin: SKIN, speaker, outDir, bgPng, gsap })
 <meta name="viewport" content="width=1080, height=1920" />
 <script src="assets/gsap.min.js"></script>
 <style>
-  @font-face { font-family: "Inter Display"; font-weight: 900; src: local("Inter Display Black"); }
-  @font-face { font-family: "Inter"; font-weight: 700; src: local("Inter Bold"), local("Inter"); }
+  @font-face { font-family: "Unbounded"; font-weight: 900; src: url("assets/fonts/Unbounded-Black.ttf") format("truetype"); }
+  @font-face { font-family: "Unbounded"; font-weight: 800; src: url("assets/fonts/Unbounded-ExtraBold.ttf") format("truetype"); }
+  @font-face { font-family: "Inter"; font-weight: 400; src: url("assets/fonts/Inter-Regular.ttf") format("truetype"); }
+  @font-face { font-family: "Inter"; font-weight: 700; src: url("assets/fonts/Inter-Bold.ttf") format("truetype"); }
+  @font-face { font-family: "Inter"; font-weight: 800; src: url("assets/fonts/Inter-ExtraBold.ttf") format("truetype"); }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 1080px; height: 1920px; overflow: hidden; background: ${SKIN.brand}; }
-  #root { position: relative; width: 1080px; height: 1920px; overflow: hidden; font-family: "Inter Display", Inter, sans-serif; color: #fff; }
+  #root { position: relative; width: 1080px; height: 1920px; overflow: hidden; font-family: "Unbounded", sans-serif; color: #fff; }
   .abs { position: absolute; }
   #bg { left: 0; top: 0; width: 1080px; height: 1920px; background: radial-gradient(120% 80% at 50% 30%, ${SKIN.brandLight} 0%, ${SKIN.brand} 55%, ${SKIN.brandDeep} 100%); }
   .slide { left: 0; top: 0; width: 1080px; height: 1920px; z-index: 4; }
-  .kicker { font-family: Inter, sans-serif; font-weight: 700; font-size: 54px; text-align: center; width: 1080px; padding: 0 60px; }
-  .head { font-weight: 900; font-size: 150px; line-height: .92; text-transform: uppercase; text-align: center; width: 1080px; padding: 0 60px; letter-spacing: -0.02em; text-shadow: 0 8px 30px rgba(0,0,0,.25); }
-  .card { width: 300px; height: 440px; border-radius: 34px; background: ${SKIN.card}; box-shadow: 0 30px 60px rgba(0,0,0,.35);
-          display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; padding: 30px; }
-  .card svg { width: 110px; height: 110px; }
-  .card p { font-weight: 900; font-size: 40px; text-transform: uppercase; text-align: center; line-height: 1.05; }
+  .kicker { font-family: Inter, sans-serif; font-weight: 700; font-size: ${kickerSize}px; text-transform: uppercase; letter-spacing: 0.08em; text-align: center; width: 1080px; padding: 0 72px; opacity: 0.85; }
+  .head { font-weight: 900; font-size: 150px; line-height: .92; text-transform: uppercase; text-align: center; width: 1080px; padding: 0 72px; letter-spacing: -0.02em; overflow-wrap: anywhere; text-shadow: 0 8px 30px rgba(0,0,0,.25); }
+  .card { width: 310px; min-height: 440px; border-radius: 28px; background: ${SKIN.card}; box-shadow: 0 24px 50px rgba(0,0,0,.4);
+          display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 24px 14px; overflow: hidden; }
+  .card-icon svg { width: 96px; height: 96px; display: block; }
+  .card p { font-weight: 800; text-transform: uppercase; text-align: center; line-height: 1.12; word-break: break-word; overflow-wrap: anywhere; width: 100%; }
+  ${slideCss}
 </style>
 </head>
 <body>
 <div id="root" data-composition-id="main" data-start="0" data-duration="${d}" data-width="1080" data-height="1920">
   <div id="bg" class="abs"></div>
   <div id="s" class="abs slide clip" data-start="0" data-duration="${d}">
-    <div class="kicker abs" style="top:${top[0]}px">${esc(s.kicker)}</div>
-    <div class="head abs" id="sh" style="top:${top[1]}px">${esc(s.head)}</div>
+    <div class="kicker abs" style="top:${top[0]}px;font-size:${kickerSize}px">${esc(kickerText)}</div>
+    <div class="head abs" id="sh" style="top:${top[1]}px;font-size:${headSize}px">${headLines.map(esc).join('<br>')}</div>
     ${items.map((it, k) => card(it, k + 1, POS[k])).join('\n    ')}
   </div>
 </div>
 <script>
 const tl = gsap.timeline({ paused: true });
 const EB = "back.out(1.7)";
-tl.from("#sh", { scale: 0.6, opacity: 0, duration: 0.3, ease: EB }, ${rel(s.head_at)})${cardTl}
-  .to("#s", { opacity: 1, duration: 0.01 }, ${f2(d - 0.01)});
+tl.from("#sh", { y: 40, opacity: 0, duration: 0.35, ease: "power3.out" }, 0.05);
+${headAnim}
+${cardTl}
+tl.to("#s", { opacity: 1, duration: 0.01 }, ${f2(d - 0.01)});
 window.__timelines = window.__timelines || {};
 window.__timelines["main"] = tl;
 tl.seek(0);
@@ -618,17 +736,9 @@ tl.seek(0);
   let sl = 'spk0';
   blurWin.forEach((w, k) => {
     const len = f2(w.b - w.a + w.dout);
-    const nf = Math.round(len * FPS);
-    inputs.push('-loop', '1', '-framerate', String(FPS), '-t', String(len), '-i', bgPng);
-    const bgIn = inIdx++;
-    // CSS blur размывает и край кадра: у края видео становится прозрачным и сквозь него виден фон (как в браузере)
-    fc.push(`color=c=black:s=204x344:r=${FPS}:d=${1 / FPS},format=gray,geq=lum='if(between(X,12,191)*between(Y,12,331),255,0)',` +
-      `gblur=sigma=3.67,crop=180:320:12:12,loop=loop=${nf}:size=1,setpts=N/${FPS}/TB[ba${k}]`);
-    fc.push(`[${bgIn}:v]scale=180:320:flags=area,format=yuv420p[bb${k}]`);
-    fc.push(`[bsrc${k}]trim=${f2(w.a)}:${f2(w.a + len)},setpts=PTS-STARTPTS,scale=180:320:flags=bilinear,gblur=sigma=3.7,` +
-      `lutyuv=y=val*0.75:u=128+(val-128)*0.75:v=128+(val-128)*0.75,format=yuva420p[bc${k}]`);
-    fc.push(`[bc${k}][ba${k}]alphamerge[bca${k}];[bb${k}][bca${k}]overlay=shortest=1[bm${k}]`);
-    fc.push(`[bm${k}]scale=${SW}:${SH}:flags=bicubic,format=yuva420p,` +
+    // Плавное кинематографичное размытие и легкое затемнение спикера на время показа плашки
+    fc.push(`[bsrc${k}]trim=${f2(w.a)}:${f2(w.a + len)},setpts=PTS-STARTPTS,scale=${SW}:${SH}:flags=bilinear,gblur=sigma=10,` +
+      `lutyuv=y=val*0.7:u=128+(val-128)*0.7:v=128+(val-128)*0.7,format=yuva420p,` +
       `fade=in:st=0:d=${w.din}:alpha=1,fade=out:st=${f2(w.b - w.a)}:d=${w.dout}:alpha=1,setpts=PTS+${f2(w.a)}/TB[bl${k}]`);
     fc.push(`[${sl}][bl${k}]overlay=eof_action=pass,format=yuv420p[spkb${k}]`); sl = `spkb${k}`;
   });
@@ -668,7 +778,7 @@ tl.seek(0);
       `[brv${k}][brm${k}]alphamerge,setpts=PTS-STARTPTS+${f2(s.t0)}/TB[br${k}]`);
     fc.push(`[${ll}][br${k}]overlay=eof_action=pass[Lb${k}]`); ll = `Lb${k}`;
   });
-  fc.push(`[${ll}]ass=${outDir}/graphics.ass,trim=0:${DUR},format=yuv420p[vout]`);
+  fc.push(`[${ll}]ass=${outDir}/graphics.ass:fontsdir=${FD},trim=0:${DUR},format=yuv420p[vout]`);
 
   // ---------- графика ----------
   buildSubtitles();
@@ -681,17 +791,68 @@ tl.seek(0);
     fs.mkdirSync(`${d}/assets`, { recursive: true });
     fs.writeFileSync(`${d}/index.html`, j.html);
     fs.copyFileSync(gsap, `${d}/assets/gsap.min.js`);
+    fs.mkdirSync(`${d}/assets/fonts`, { recursive: true });
+    for (const name of ['Unbounded-Black.ttf', 'Unbounded-ExtraBold.ttf', 'Inter-Regular.ttf', 'Inter-Bold.ttf', 'Inter-ExtraBold.ttf']) {
+      fs.copyFileSync(path.join(FD, name), `${d}/assets/fonts/${name}`);
+    }
     fs.writeFileSync(`${d}/hyperframes.json`, JSON.stringify({ paths: { blocks: 'compositions', components: 'compositions/components', assets: 'assets' }, media: { autoProxy: true } }, null, 2));
     fs.writeFileSync(`${d}/meta.json`, JSON.stringify({ id: j.id, name: j.id }, null, 2));
     fs.writeFileSync(`${d}/package.json`, JSON.stringify({ name: j.id, private: true, type: 'module' }, null, 2));
   }
+  // ---------- SFX звуковой дизайн ----------
+  const sfxEvents = [];
+  scenes.forEach(s => {
+    if (s.c === 'slide_full') {
+      sfxEvents.push({ t: s.t0, file: 'whoosh_short.mp3', vol: 0.35 });
+      if (s.object?.items) {
+        s.object.items.forEach(it => {
+          if (it[2] !== undefined) sfxEvents.push({ t: s.t0 + it[2], file: 'bubble.mp3', vol: 0.35 });
+        });
+      }
+    }
+    if (s.c === 'card_over_blur') {
+      sfxEvents.push({ t: s.t0, file: 'whoosh_short.mp3', vol: 0.25 });
+      if (s.object?.at !== undefined) sfxEvents.push({ t: s.object.at, file: 'pop.mp3', vol: 0.40 });
+      if (s.object?.items) {
+        s.object.items.forEach(it => {
+          if (it[1] !== undefined) sfxEvents.push({ t: it[1], file: 'click.mp3', vol: 0.35 });
+        });
+      }
+    }
+    if (s.c === 'speaker_circle') {
+      if (s.badge_at !== undefined) sfxEvents.push({ t: s.badge_at, file: 'pop.mp3', vol: 0.35 });
+    }
+    if (s.c === 'speaker_rect' && s.object?.c === 'stat_big') {
+      sfxEvents.push({ t: s.object.at, file: 'impact.mp3', vol: 0.30 });
+    }
+    if (s.c === 'cta') {
+      if (s.keyword_at !== undefined) sfxEvents.push({ t: s.keyword_at, file: 'ding.mp3', vol: 0.40 });
+    }
+  });
+
+  const sfxLabels = [];
+  sfxEvents.forEach((ev, k) => {
+    const sfxPath = path.join(SFX_DIR, ev.file);
+    if (fs.existsSync(sfxPath)) {
+      inputs.push('-i', sfxPath);
+      const sfxIn = inIdx++;
+      const ms = Math.max(0, Math.round(ev.t * 1000));
+      fc.push(`[${sfxIn}:a]adelay=${ms}|${ms},volume=${ev.vol}[sfx${k}]`);
+      sfxLabels.push(`[sfx${k}]`);
+    }
+  });
+
+  if (sfxLabels.length > 0) {
+    fc.push(`[0:a]${sfxLabels.join('')}amix=inputs=${sfxLabels.length + 1}:duration=first:dropout_transition=0[aout]`);
+  }
+
   fs.writeFileSync(`${outDir}/filter.txt`, fc.join(';\n'));
-  return { inputs, hfJobs: hfJobs.map(j => j.id), stats: { assEvents: G.count(), maskEvents } };
+  return { inputs, hfJobs: hfJobs.map(j => j.id), hasSfx: sfxLabels.length > 0, stats: { assEvents: G.count(), maskEvents, sfxCount: sfxLabels.length } };
 }
 
 // Обложка: первый кадр спикера + хук по центру (капс Inter Display Black, строки белые с тенью, последняя — в плашке бренда,
 // как акцент кинетических титров эталона). Пишет ASS-файл; кадр и наложение делает cli (ffmpeg).
-export function coverAss(hook, skin, file) {
+export function coverAss(hook, skin, file, palette = null) {
   const G = makeAss(W, H), f = FONTS.disp900, lsK = -0.02;
   const text = String(hook).toUpperCase().trim();
   let size = 150, lines = wrap(f, size, text, 900, lsK * size);
@@ -700,21 +861,34 @@ export function coverAss(hook, skin, file) {
   const ls = lsK * size, lh = size * 0.98, padX = 34, padY = 10, shadow = { dx: 0, dy: 8, blur: 14, op: 0.6 };
   const blockH = lines.length * lh + (lines.length > 1 ? 2 * padY : 0);
   let y = H / 2 - blockH / 2 - 40;
+  const pillBg = palette?.caption?.fill || palette?.accent || skin.brand;
+  const pillText = palette?.caption?.text || skin.white;
+  const normalText = palette?.ink || skin.white;
   const parts = [];
   lines.forEach((ln, i) => {
     const tw = textW(f, size, ln, ls), x = W / 2 - tw / 2, pill = i === lines.length - 1 && lines.length > 1;
-    if (pill) { y += padY; parts.push({ kind: 'draw', x: x - padX, y: y - padY + 4, path: rrect(f2(tw + 2 * padX), f2(lh + 2 * padY - 8), 26), color: skin.brand, shadow: { dx: 0, dy: 16, blur: 18, op: 0.35 } }); }
-    parts.push(textPart({ font: f, size, text: ln, x, lineTop: y, lineH: lh, color: skin.white, ls, shadow: pill ? null : shadow }));
+    if (pill) { y += padY; parts.push({ kind: 'draw', x: x - padX, y: y - padY + 4, path: rrect(f2(tw + 2 * padX), f2(lh + 2 * padY - 8), 26), color: pillBg, shadow: { dx: 0, dy: 16, blur: 18, op: 0.35 } }); }
+    parts.push(textPart({ font: f, size, text: ln, x, lineTop: y, lineH: lh, color: pill ? pillText : normalText, ls, shadow: pill ? null : shadow }));
     y += lh;
   });
   G.element({ t0: 0, t1: 1, parts, layer: 1 });
   G.write(file);
 }
 
-// фон бренда (радиальный градиент как у слайда HyperFrames) — один PNG на скин
-export function bgGeq(skin) {
-  const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
-  const [a, b, c] = [rgb(skin.brandLight), rgb(skin.brand), rgb(skin.brandDeep)];
+// фон бренда (радиальный градиент как у слайда HyperFrames) — один PNG на скин / стиль
+export function bgGeq(skin, palette = null) {
+  const rgb = h => {
+    if (!h) return [0, 0, 0];
+    const hex = h.replace(/^#/, '');
+    if (hex.length === 3) return [0, 1, 2].map(i => parseInt(hex[i] + hex[i], 16));
+    return [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16));
+  };
+  const light = palette?.bgLight || skin.brandLight;
+  const main = palette?.bgMain || skin.brand;
+  const deep = palette?.bgDeep || skin.brandDeep;
+  const [a, b, c] = [rgb(light), rgb(main), rgb(deep)];
   const ch = j => `'st(0,hypot((X-540)/1296,(Y-576)/1536));if(lt(ld(0),0.55),${a[j]}+(${b[j]}-${a[j]})*ld(0)/0.55,if(lt(ld(0),1),${b[j]}+(${c[j]}-${b[j]})*(ld(0)-0.55)/0.45,${c[j]}))'`;
   return `format=gbrp,geq=r=${ch(0)}:g=${ch(1)}:b=${ch(2)}`;
 }
+
+

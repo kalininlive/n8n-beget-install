@@ -1,0 +1,85 @@
+# GENESIS поверх Beget-сборки n8n (/opt/beget/n8n) — только ДОБАВЛЯЕТ сервисы, базу/Traefik/образ n8n не трогает.
+# Подключается строкой в .env: COMPOSE_FILE=docker-compose.yml:docker-compose.override.yml:docker-compose.genesis.yml
+# (её пишет beget/install-genesis.sh). Пути относительные — от /opt/beget/n8n; файлы набора — в ./genesis-kit/.
+#   telegram-bot-api (+ proxy) — локальный Bot API, файлы до 2 ГБ; Base URL кредов Telegram в n8n: http://telegram-bot-api-proxy
+#   faster-whisper             — распознавание речи (шим /opt/shims/whisper)
+#   edge-tts                   — озвучка (HTTP edge-tts:5050, шим /opt/shims/edge-tts)
+volumes:
+  telegram-bot-data:
+    driver: local
+  whisper-models:
+    driver: local
+
+services:
+  n8n:
+    volumes:
+      - telegram-bot-data:/data/telegram-files
+      - telegram-bot-data:/var/lib/telegram-bot-api:ro
+  n8n-worker:
+    volumes:
+      - telegram-bot-data:/data/telegram-files
+      - telegram-bot-data:/var/lib/telegram-bot-api:ro
+
+  telegram-bot-api:
+    image: aiogram/telegram-bot-api:latest
+    container_name: telegram-bot-api
+    restart: unless-stopped
+    environment:
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
+      TELEGRAM_LOCAL: "true"
+      TELEGRAM_STAT: "true"
+    volumes:
+      - telegram-bot-data:/var/lib/telegram-bot-api
+      # отправка файлов с диска до 2 ГБ: в n8n file = "file:///data/…"
+      - ./data:/data:ro
+    ports:
+      - "127.0.0.1:8081:8081"
+
+  telegram-bot-api-proxy:
+    image: nginx:1.27-alpine
+    container_name: telegram-bot-api-proxy
+    restart: unless-stopped
+    depends_on:
+      - telegram-bot-api
+    volumes:
+      - telegram-bot-data:/var/lib/telegram-bot-api:ro
+      - ./genesis-kit/telegram-bot-api/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+  faster-whisper:
+    image: ghcr.io/speaches-ai/speaches:${WHISPER_IMAGE_TAG:-0.8.3-cpu}
+    container_name: faster-whisper
+    restart: unless-stopped
+    group_add:
+      - '101'   # группа telegram-bot-api: чтение файлов Bot API
+    mem_limit: ${WHISPER_MEM_LIMIT:-1500m}
+    environment:
+      WHISPER_MODEL: ${WHISPER_MODEL:-Systran/faster-whisper-small}
+      WHISPER__COMPUTE_TYPE: int8
+      WHISPER__CPU_THREADS: ${WHISPER_CPU_THREADS:-2}
+      WHISPER__TTL: ${WHISPER_TTL:-600}
+      ENABLE_UI: 'false'
+      LOG_LEVEL: info
+      HTTP_PROXY: ${PROXY_URL:-}
+      HTTPS_PROXY: ${PROXY_URL:-}
+      NO_PROXY: ${NO_PROXY:-}
+    volumes:
+      - whisper-models:/home/ubuntu/.cache/huggingface/hub
+      - ./data:/data:ro
+      - telegram-bot-data:/var/lib/telegram-bot-api:ro
+
+  edge-tts:
+    image: travisvn/openai-edge-tts:latest
+    container_name: edge-tts
+    restart: unless-stopped
+    environment:
+      PORT: 5050
+      REQUIRE_API_KEY: 'false'
+      DEFAULT_VOICE: ru-RU-DmitryNeural
+      DEFAULT_RESPONSE_FORMAT: mp3
+      DEFAULT_SPEED: '1.0'
+      EXPAND_API: 'true'
+    volumes:
+      - ./data:/data
+      - ./genesis-kit/edge-tts-custom/server.py:/app/server.py:ro
+      - ./genesis-kit/edge-tts-custom/tts_handler.py:/app/tts_handler.py:ro

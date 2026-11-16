@@ -110,8 +110,8 @@ function main() {
 
     const outFile = path.resolve(opt('--out', path.join(job, 'kraft.mp4')));
     log(`HyperFrames: ${plan.scenes.length} сцен, ${plan.duration} с`);
-    const r = spawnSync('hyperframes', ['render', '-o', outFile, '--no-low-memory-mode', '--workers', opt('--workers', process.env.KRAFT_WORKERS || '3')],
-      { cwd: wd, env: { ...process.env, HYPERFRAMES_NO_UPDATE_CHECK: '1', ...(findBrowser() ? { HYPERFRAMES_BROWSER_PATH: findBrowser() } : {}) }, encoding: 'utf8', maxBuffer: 64 << 20 });
+    const r = spawnSync('hyperframes', ['render', '-o', outFile, '--low-memory-mode', '--workers', process.env.KRAFT_WORKERS || '1'],
+      { cwd: wd, env: { ...process.env, HYPERFRAMES_NO_UPDATE_CHECK: '1', PRODUCER_STREAMING_ENCODE_MAX_DURATION_SECONDS: '300', HF_DE_PARALLEL_STREAM: 'true', ...(findBrowser() ? { HYPERFRAMES_BROWSER_PATH: findBrowser() } : {}) }, encoding: 'utf8', maxBuffer: 64 << 20 });
     if (r.status !== 0 || !fs.existsSync(outFile)) fail('HyperFrames упал', { stderr: String(r.stderr || r.stdout).slice(-2000) });
     T.render = Date.now();
 

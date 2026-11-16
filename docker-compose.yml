@@ -23,7 +23,7 @@ services:
       - N8N_TRUSTED_PROXIES=*
       - N8N_PROXY_HOPS=${N8N_PROXY_HOPS}
 
-      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_ACTIVE=false
       - N8N_BASIC_AUTH_USER=admin
       - N8N_BASIC_AUTH_PASSWORD=admin
 
@@ -79,7 +79,6 @@ services:
       - ./update_n8n.sh:/opt/n8n-install/updaten8n.sh
       - ./backups:/opt/n8n-install/backups
       - ./.env:/opt/n8n-install/.env
-      - /opt/rsshub:/opt/rsshub
       - ./shims/python:/usr/bin/python:ro
       - ./shims/python3:/usr/bin/python3:ro
       - ./shims/ffmpeg:/usr/bin/ffmpeg:ro
@@ -157,7 +156,6 @@ services:
       - n8n_data:/home/node/.n8n
       - /opt/n8n-install/data:/data
       - ./.env:/opt/n8n-install/.env
-      - /opt/rsshub:/opt/rsshub
       - ./shims/python:/usr/bin/python:ro
       - ./shims/python3:/usr/bin/python3:ro
       - ./shims/ffmpeg:/usr/bin/ffmpeg:ro
@@ -198,15 +196,21 @@ services:
       - redis_data:/data
 
   n8n-traefik:
-    image: traefik:2.10.4
+    # Traefik 3.x: 2.10 на Docker ≥ 25 не видит контейнеры (старый API клиента) — n8n недоступен снаружи.
+    # DOCKER_API_VERSION — минимальная версия API, которую понимает свежий Docker (проверено у клиента, Docker 29).
+    image: traefik:v3
     container_name: n8n-traefik
     restart: always
+    environment:
+      - DOCKER_API_VERSION=1.44
     command:
       - "--api.insecure=true"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--providers.docker.network=n8n-install_default"
       - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
       - "--entrypoints.websecure.address=:443"
       - "--certificatesResolvers.myresolver.acme.httpChallenge.entryPoint=web"
       - "--certificatesResolvers.myresolver.acme.email=${EMAIL}"
@@ -220,7 +224,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./letsencrypt:/letsencrypt
       - ./traefik_dynamic:/etc/traefik/dynamic
-      - /opt/rsshub:/opt/rsshub:ro
 
   n8n-tools:
     build:

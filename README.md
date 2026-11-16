@@ -1,15 +1,112 @@
 # n8n-BEGET Install 🌌
 
-Полная установка production-стека n8n одной командой на чистый Ubuntu 22.04/24.04:
+Production-стек n8n с видео-, карусельными и голосовыми движками, локальным распознаванием речи и Telegram-ботом — одной командой на чистый Ubuntu 22.04/24.04.
 
-* ✅ `n8n` (queue mode: `n8n-app` + `n8n-worker`), `Postgres 15`, `Redis 7`, `Traefik` (SSL Let's Encrypt)
-* ✅ Кастомный образ n8n (`Dockerfile.n8n`) + `n8n-tools` (ffmpeg, yt-dlp, python3) через шимы
-* ✅ **Движки рендера** в `n8n-media-render`: маскот-видео на Remotion и **html-render** (HTML → PNG карусели), GSAP для анимаций в HTML — офлайн, без CDN — см. [ENGINES.md](ENGINES.md)
-* ✅ `edge-tts` (бесплатная озвучка + пословные таймкоды), `SearXNG` (web search для AI Assistant), `n8n Sandbox` (code sandbox для AI Assistant), **локальный `telegram-bot-api`** + `telegram-bot-api-proxy` (файлы до 2 ГБ; Base URL кредов Telegram — `http://telegram-bot-api-proxy`), **`faster-whisper`** (бесплатное локальное распознавание речи, шим `whisper`)
-* ✅ Ежечасная уборка временных файлов (`scripts/cleanup_data.sh`, cron) — см. `STACK.md` §7
-* ✅ Telegram-бот: `/status`, `/logs`, `/backups`, `/update`; автобэкап в 02:00; post-check движков после обновления
+Подробности: [STACK.md](STACK.md) (сервисы и правила сборки) · [ENGINES.md](ENGINES.md) (движки рендера) · [VIDEO_STYLES.md](VIDEO_STYLES.md) (стили и путь монтажа роликов) · [UPDATE_HISTORY.md](UPDATE_HISTORY.md).
 
-Состав и правила сборки — [STACK.md](STACK.md). История обновлений — [UPDATE_HISTORY.md](UPDATE_HISTORY.md).
+> Ветки: `main` — универсальный установщик v4 (один `install.sh`), `stack-v2` — реальная боевая сборка сервера (compose-файлы, шимы, движки). Слияние `stack-v2` → `main` — решение владельца.
+
+---
+
+## 📦 Что входит в сборку
+
+### Ядро
+
+| Компонент | Версия / образ | Роль |
+|---|---|---|
+| n8n (`n8n-app` + `n8n-worker`, queue mode) | `n8nio/n8n:latest` (последняя версия; закрепить — `FROM n8nio/n8n:2.x.y` в `Dockerfile.n8n`) + `fs-extra`, `path`, `oauth-1.0a` | оркестрация воркфлоу |
+| Postgres | `postgres:15-alpine` | база n8n |
+| Redis | `redis:7-alpine` | очередь Bull |
+| Traefik | `traefik:v3` (последняя 3.x) | HTTPS (Let's Encrypt), редирект http→https |
+| n8n-tools | Alpine 3.20: ffmpeg, yt-dlp, python3, fontconfig | утилиты через шимы |
+| n8n-bot | Node 20 + `node-telegram-bot-api` | админ-бот: `/status`, `/logs`, `/backups`, `/update` |
+
+### Движки рендера (контейнер `n8n-media-render`, `Dockerfile.render`)
+
+База: `node:22-bookworm-slim` + системный Chromium + ffmpeg + шрифты (Inter, Noto, Noto Color Emoji, DejaVu, FreeFont, Rubik).
+
+| Библиотека / движок | Версия | Что делает |
+|---|---|---|
+| **Remotion** (`remotion`, `@remotion/cli`) | 4.0.544 | видео «маскот»: React-композиции 1080×1920 @ 60 fps |
+| **HyperFrames** | 0.9.56 (закреплена в `Dockerfile.render`; автообновление CLI отключено) | HTML → видео; сцены стилей Крафт и MONTAGE v2 |
+| **GSAP** | 3.15.1 | анимации в HTML офлайн: `file:///opt/engines/vendor/gsap/gsap.min.js`, в Node — `require('gsap')` |
+| **puppeteer-core** | 25.17.0 | движок `html-render` (карусели HTML → PNG, 1080×1350 @2x) |
+| **fontkit** | 3.0.0 (в контейнере берётся из HyperFrames) | шрифты в MONTAGE v2 |
+| ffmpeg + libass, ffprobe | системные | нарезка, склейка, субтитры, нормализация звука |
+| **kraft-reel** | 0.4.0 | стиль «Крафт» + чистка голосовых (`voice-cut`) |
+| **montage-v2** | 0.5.4 | гибридный монтаж: говорящая голова + графика, 17 стилей, EDL-нарезка пауз, QA-инспектор |
+
+### Речь и озвучка
+
+| Сервис | Образ | Роль |
+|---|---|---|
+| `edge-tts` | `travisvn/openai-edge-tts` + наш патч (`edge-tts-custom/`) | бесплатная озвучка + пословные таймкоды (`/v1/audio/speech-with-timestamps`) |
+| `faster-whisper` | `ghcr.io/speaches-ai/speaches:0.8.3-cpu` | распознавание речи вместо AssemblyAI; модель — `WHISPER_MODEL` (small / medium / large-v3-turbo); шим `whisper` |
+| `audio-prep` (внутри `n8n-media-render`, порт 3387) | `engines/montage-v2/audio-prep-service.mjs` | чистка голоса (Auphonic Free при подтверждённом бесплатном аккаунте, иначе локальный ffmpeg) |
+
+### Telegram
+
+| Сервис | Роль |
+|---|---|
+| `telegram-bot-api` (`aiogram/telegram-bot-api`) | локальный Bot API: **нужны `TELEGRAM_API_ID` / `TELEGRAM_API_HASH`** (my.telegram.org). Скачивание файлов до 2 ГБ, отправка файлом с диска `file:///data/…` до 2 ГБ |
+| `telegram-bot-api-proxy` (nginx) | **Base URL кредов Telegram в n8n: `http://telegram-bot-api-proxy`**; отдаёт файлы по HTTP |
+| Админ-бот `n8n-bot` | управление сервером из Telegram, ежедневный бэкап в 02:00 |
+
+> **Лимит файлов.** Устанавливается всегда (установщик спрашивает `TELEGRAM_API_ID/HASH`). Bot API (локальный) принимает и отправляет файлы **до 2 ГБ**; для отправки 2 ГБ нужно слать файл с диска (`file:///data/…`), по URL — только до 20 МБ. Выше 2 ГБ (до 4 ГБ) Telegram позволяет только пользовательскому аккаунту Premium через MTProto (юзер-бот) — в сборку не входит.
+
+### Поиск и AI-инструменты n8n
+
+| Сервис | Роль |
+|---|---|
+| `searxng` | web-поиск для AI Assistant (JSON API) |
+| `sandbox-api` + `sandbox-runner-1` (+ `sandbox-certs`) | code sandbox для AI Assistant (`n8n-sandbox-service` 1.2.0) |
+
+### Сеть и прокси
+
+- `PROXY_URL` в `.env` (пусто — без прокси): HTTP/HTTPS-прокси для n8n, worker, media-render и др.
+- `NO_PROXY` — имя каждого внутреннего сервиса **в начало списка**, иначе 502 (правило железное, `install-extras.sh` делает сам).
+
+### Уборка и бэкапы
+
+- `scripts/cleanup_data.sh` — cron ежечасно: файлы Bot API (24 ч), `/data/tg-send` (3 ч), `/data/reels` и `/data/carousel/jobs` (24 ч), `/data/genesis` (3 дня); шим `cleanup-genesis-job` — точечная уборка папки задачи.
+- `backup_n8n.sh` + cron 02:00: все workflows и credentials → zip → Telegram (< 50 МБ) или `backups/`.
+- `update_n8n.sh`: бэкап → новая версия n8n → пересборка → post-check движков → алерт в Telegram.
+
+---
+
+## 🎬 Стили и путь монтажа роликов
+
+Все стили живут в репо данными/кодом движков и выбираются из меню Telegram-бота. Полная карта — [VIDEO_STYLES.md](VIDEO_STYLES.md). Коротко:
+
+| Путь | Что | Стили |
+|---|---|---|
+| `engines/kraft-reel/` | ролик без персонажа: бумага, линейный город, окна-приложения; режимы Ручной / Авто / Голос | `kraft` (утверждён), `kraft-night` (черновик) |
+| `engines/montage-v2/` | видео спикера → whisper → агент-режиссёр (JSON-план) → validate → render | 17 стилей, формат `expert` |
+| studio-engine (Remotion, том `/data/studio-engine`) | маскот-ролики 1080×1920 @ 60 fps | `MascotFactoryReel` |
+| `engines/html-render/` | карусели HTML → PNG | 4 стиля карусели (шаблоны вшиты в воркфлоу `mcarousel`) |
+
+Как добавлять цвет / декор / формат / стиль / сцену — [engines/kraft-reel/STYLES.md](engines/kraft-reel/STYLES.md) и [engines/montage-v2/STYLES.md](engines/montage-v2/STYLES.md).
+
+---
+
+## 🔌 Интеграции вне установщика
+
+| Что | Где |
+|---|---|
+| **GENESIS** (Telegram-бот контент-завода, ~50 воркфлоу) | репо `genesis-n8n`, ставится `moy-n8n: npm run client:genesis`; использует все движки выше |
+
+RSSHub и Дзен-публикатор (`kalininlive/dzen-factory`, приватный репозиторий) в сборку не входят; RSSHub не используется.
+
+---
+
+## ❌ Чего в сборке нет (и что с этим делать)
+
+| Нет | Статус |
+|---|---|
+| Дзен-публикатор | отдельный приватный репозиторий `dzen-factory`, ставится вручную (его `deploy.sh`) |
+| Юзер-бот Telegram для файлов 2–4 ГБ | не входит (Bot API ограничен 2 ГБ); отдельные проекты `City News Hub/userbot` (Telethon), `SpyUserbotWebsansay` (GramJS) |
+| studio-engine (проект маскота, ≈1 ГБ) | вне git, на сервере в `data/studio-engine`; план публикации — STACK.md §5 |
+| kraft-reel и montage-v2 «запечены в образ» | пока ставятся в том `/data/files/…` командами `deploy:kraft-reel` / `deploy:montage-v2` из `moy-n8n` |
 
 ---
 
@@ -19,52 +116,41 @@
 bash <(curl -s https://raw.githubusercontent.com/kalininlive/n8n-beget-install/main/install.sh)
 ```
 
-Скрипт спросит: домен, email для SSL, пароль Postgres (или сгенерирует), токен и ID Telegram, ключ шифрования (или сгенерирует), внешний прокси (можно пропустить). Дальше всё автоматически: Docker → клон репо в `/opt/n8n-install` → `.env` из `.env.template` → `install-extras.sh` (секреты sandbox/searxng, `NO_PROXY`, папки `/data`, шрифты) → `docker compose build && up -d` → cron → проверка.
+Скрипт спросит: домен, email для SSL, пароль Postgres (или сгенерирует), токен и ID Telegram, `TELEGRAM_API_ID/HASH`, ключ шифрования (или сгенерирует), внешний прокси (можно пропустить). Дальше автоматически: Docker → клон репо в `/opt/n8n-install` → `.env` → `install-extras.sh` → `docker compose build && up -d` → cron → проверка.
 
-Установка на существующий сервер только «экстры» (движки, TTS, поиск, sandbox), идемпотентно:
+Только «экстры» (движки, TTS, поиск, sandbox), идемпотентно:
 
 ```bash
 cd /opt/n8n-install && bash install-extras.sh          # всё
 bash install-extras.sh --check                         # только проверка
 ```
 
-> Движок маскота дополнительно требует проект `studio-engine` в `data/studio-engine/` — как он попадает на сервер, описано в [STACK.md §5](STACK.md).
+Если `TELEGRAM_API_ID/HASH` пропустили — впишите их в `.env` и повторите `install-extras.sh`: без них контейнер `telegram-bot-api` не запускается.
 
 ---
 
 ## 🧱 Правила
 
-1. **На сервере — только движки.** Логика, промпты, HTML-шаблоны, стили — в нодах воркфлоу n8n.
+1. **На сервере — только движки.** Логика, промпты, HTML-шаблоны — в нодах воркфлоу n8n.
 2. **Новые сервисы — только в `docker-compose.override.yml`**, поднимать точечно: `docker compose up -d <service>`.
-3. **Новый внутренний хост — сразу в начало `NO_PROXY`** в `.env` и `docker compose up -d n8n n8n-worker`.
+3. **Новый внутренний хост — сразу в начало `NO_PROXY`**, затем `docker compose up -d n8n n8n-worker`.
 4. **Шим = одна строка** `exec docker exec -i <container> <cmd> "$@"` в `shims/`, `chmod +x`.
 5. **Секреты только в `.env`** (шаблон `.env.template`); в compose — `${...}`.
 
+Шимы: `ffmpeg`, `ffprobe`, `yt-dlp`, `python`, `python3`, `fc-scan`, `edge-tts`, `whisper`, `remotion`, `hyperframes`, `render-html`, `render-studio-reel`, `kraft-reel`, `montage-v2`, `cleanup-genesis-job`.
+
 ---
 
-## 🚀 Обновление n8n
-
-Через Telegram `/update` или на сервере `bash update_n8n.sh` (из бота). Скрипт: бэкап → `FROM n8nio/n8n:<latest>` в `Dockerfile.n8n` → `docker compose build n8n n8n-worker && up -d n8n n8n-worker` → обновление community-нод → **post-check движков** (`remotion`, `render-html`, `ffmpeg`, `edge-tts`, `telegram-bot-api-proxy`, `faster-whisper`) с алертом в Telegram → лёгкая уборка (`image prune -f`, без `-a`).
-
-Ручное обновление:
+## 🚀 Обновление и бэкап
 
 ```bash
-cd /opt/n8n-install
-docker compose build n8n n8n-worker
-docker compose up -d n8n n8n-worker
-```
-
-Пересборка движков (не трогает n8n):
-
-```bash
+# n8n до последней версии: Telegram /update или
+bash update_n8n.sh        # build --pull, тег :latest остаётся
+# только движки (n8n не трогается)
 docker compose build n8n-media-render && docker compose up -d n8n-media-render
 ```
 
----
-
-## 📅 Бэкап
-
-Каждый день в 02:00 (`backup_n8n.sh`, cron): экспорт всех workflows и credentials → zip → в Telegram (если < 50 MB) или в `/opt/n8n-install/backups/`.
+Управление с ПК (аудит, бэкап, deploy движков, `npm run doctor`) — проект `moy-n8n`.
 
 ---
 
@@ -76,15 +162,18 @@ docker compose build n8n-media-render && docker compose up -d n8n-media-render
 ├── docker-compose.yml                 # базовый стек
 ├── docker-compose.override.yml        # движки и доп. сервисы
 ├── Dockerfile.n8n / .render / .tools  # образы
-├── engines/html-render/               # движок HTML → PNG (+ шрифты каруселей)
-├── shims/                             # remotion, render-html, ffmpeg, ffprobe, yt-dlp, python, edge-tts, whisper, …
-├── edge-tts-custom/, searxng-settings.yml
-├── bot/                               # Telegram-бот
+├── engines/
+│   ├── html-render/                   # HTML → PNG (карусели) + шрифты
+│   ├── kraft-reel/                    # Крафт + голос (styles/, skins/, formats/)
+│   └── montage-v2/                    # гибридный монтаж (styles/, hyperframes/components, sfx/, fonts/)
+├── shims/                             # шимы вызова движков из n8n
+├── beget/                             # набор GENESIS для серверов с шаблоном Beget (/opt/beget/n8n)
+├── workflows/                         # mcarousel-genesis.json, sync-assets-s3.json
+├── edge-tts-custom/, telegram-bot-api/, searxng-settings.yml
+├── bot/                               # админ-бот Telegram
+├── scripts/                           # cleanup_data.sh, cron_backup.sh
 ├── update_n8n.sh, backup_n8n.sh
-├── .env.template  →  .env (секреты, не в git)
-├── data/                              # /data во всех контейнерах: reels/, carousel/jobs/, studio-engine/, files/
-├── STACK.md, ENGINES.md, UPDATE_HISTORY.md
-└── backups/, logs/, letsencrypt/      # не в git
+├── .env.template  →  .env             # секреты, не в git
+├── data/                              # /data во всех контейнерах (reels/, carousel/jobs/, studio-engine/, files/, genesis/)
+└── STACK.md, ENGINES.md, VIDEO_STYLES.md, UPDATE_HISTORY.md
 ```
-
-Управление с ПК (аудит, бэкап, deploy движков, doctor) — проект `moy-n8n`.

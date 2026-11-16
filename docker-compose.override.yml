@@ -47,10 +47,9 @@ services:
       dockerfile: Dockerfile.render
     container_name: n8n-media-render
     restart: always
-    command:
-    - sh
-    - -lc
-    - sleep infinity
+    command: ["node", "--use-env-proxy", "/data/files/montage-v2/engine/montage-v2/audio-prep-service.mjs"]
+    expose:
+    - "3387"
     volumes:
     - /opt/n8n-install/data:/data
     - /opt/n8n-install/data/studio-engine:/data/studio-engine

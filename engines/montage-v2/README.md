@@ -3,6 +3,7 @@
 План ролика (JSON из каталога компонентов) + слова whisper + видео спикера → готовый ролик 1080×1920, 30 fps.
 Сцены без спикера (`slide_full`) рендерит HyperFrames, всё остальное — ffmpeg + libass.
 Эталон вида: `genesis-n8n/pilot/montage-v2/reference-31s.mp4`. Каталог и правила: `genesis-n8n/docs/montage-v2-library.md`.
+Для workflow 7 и 19 движок также предоставляет `style-next`: общий последовательный цикл 17 стилей хранится вне контейнера в `/data/files/genesis-video-style-cycle.json`.
 
 | Файл | Что |
 |---|---|
@@ -13,6 +14,7 @@
 | `validate.mjs` | схема + правила режиссуры §3 + привязка `*_at` к словам whisper |
 | `render.mjs` | сборка: `graphics.ass`, `mask_spk.ass`, проекты HF-слайдов, ffmpeg-граф |
 | `cli.mjs` | `montage-v2 validate …` / `montage-v2 render <jobDir>` |
+| `audio-prep-service.mjs`, `audio-prep.mjs` | внутренний HTTP endpoint для workflow 7: API `/user.json` должен подтвердить бесплатный аккаунт Auphonic; иначе локальный FFmpeg. Удаляет подтверждённый джингл, длинные паузы и пересчитывает слова до монтажа |
 | `skins/*.json` | готовые скины с ручной палитрой |
 
 ## Вызов

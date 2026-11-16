@@ -74,11 +74,15 @@ notify "📦 *Шаг 3:* обновляю контейнеры n8n и n8n-worker
 # Обновляем версию в Dockerfile.n8n
 if [ -n "$LATEST" ]; then
   echo "✏️ Обновляю Dockerfile.n8n на версию $LATEST..."
-  sed -i "s|^FROM n8nio/n8n:.*|FROM n8nio/n8n:$LATEST|g" Dockerfile.n8n
+  # По умолчанию в Dockerfile.n8n стоит :latest — тег не правим, образ подтягиваем через build --pull.
+  # Если версия закреплена вручную (FROM n8nio/n8n:2.x.y) — переводим на последнюю.
+  if ! grep -q '^FROM n8nio/n8n:latest' Dockerfile.n8n; then
+    sed -i "s|^FROM n8nio/n8n:.*|FROM n8nio/n8n:$LATEST|g" Dockerfile.n8n
+  fi
 fi
 
 # Используем системный docker compose для синхронного обновления обоих сервисов
-docker compose build n8n n8n-worker
+docker compose build --pull n8n n8n-worker
 docker compose up -d n8n n8n-worker
 
 # === Шаг 3.1. Обновление Community Nodes ===

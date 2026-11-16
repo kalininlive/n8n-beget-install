@@ -1,0 +1,27 @@
+{
+  "id": "chalkboard",
+  "name": "Chalkboard",
+  "status": "approved",
+  "approved": "2026-10-19",
+  "description": "Blueprint-green grid with chalk-like contrast; this is a lightweight visual adaptation.",
+  "fits": "Step-by-step teaching",
+  "components": [
+    "talking",
+    "slide_full",
+    "speaker_circle",
+    "speaker_rect",
+    "card_over_blur",
+    "broll_own",
+    "cta"
+  ],
+  "render_scope": "Style is applied to HyperFrames full-screen slide_full scenes. Talking-head, subtitle and B-roll layers retain the reference montage treatment; this engine does not render Remotion mascot or virtual-camera compositions.",
+  "render": {
+    "bg": "linear-gradient(145deg,#0D392D,#174B39)",
+    "ink": "#F4F2DC",
+    "surface": "#174B39",
+    "border": "rgba(244,242,220,.48)",
+    "radius": "8px",
+    "shadow": "0 20px 44px rgba(0,0,0,.32)",
+    "texture": "repeating-linear-gradient(0deg,rgba(255,255,255,.045) 0 1px,transparent 1px 4px)"
+  }
+}

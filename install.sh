@@ -13,6 +13,7 @@ REPO_URL="${REPO_URL:-https://github.com/kalininlive/n8n-beget-install.git}"
 REPO_BRANCH="${REPO_BRANCH:-main}"
 INSTALL_DIR="/opt/n8n-install"
 
+
 ### Проверка прав
 if (( EUID != 0 )); then
   echo "❗ Скрипт должен быть запущен от root: sudo bash install.sh"
@@ -30,6 +31,9 @@ read -p "🔐 Введите пароль для базы данных Postgres 
 read -p "🤖 Введите Telegram Bot Token: " TG_BOT_TOKEN
 read -p "👤 Введите Telegram User ID (для уведомлений): " TG_USER_ID
 read -p "🗝️  Введите ключ шифрования для n8n (Enter для генерации): " N8N_ENCRYPTION_KEY
+echo "📎 Локальный Telegram Bot API (файлы до 2 ГБ): ключи с https://my.telegram.org → API development tools"
+read -p "🔑 TELEGRAM_API_ID: " TELEGRAM_API_ID
+read -p "🔑 TELEGRAM_API_HASH: " TELEGRAM_API_HASH
 read -p "🌍 Внешний HTTP-прокси для n8n (например http://user:pass@host:port, Enter — без прокси): " PROXY_URL
 
 [ -z "$DOMAIN" ] && { echo "❌ Домен обязателен"; exit 1; }
@@ -90,6 +94,8 @@ set_env WEBHOOK_URL "https://${DOMAIN}/"
 set_env TG_BOT_TOKEN "$TG_BOT_TOKEN"
 set_env TG_USER_ID "$TG_USER_ID"
 set_env PROXY_URL "$PROXY_URL"
+set_env TELEGRAM_API_ID "$TELEGRAM_API_ID"
+set_env TELEGRAM_API_HASH "$TELEGRAM_API_HASH"
 set_env DOCKER_GID "$(getent group docker | cut -d: -f3 || echo 999)"
 
 cat > "bot/.env" <<EOF

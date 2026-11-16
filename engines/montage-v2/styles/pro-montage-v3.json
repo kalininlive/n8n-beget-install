@@ -1,0 +1,27 @@
+{
+  "id": "pro-montage-v3",
+  "name": "Pro-монтаж v3",
+  "status": "approved",
+  "approved": "2026-10-19",
+  "description": "Bold, readable full-screen scene cards. Speaker cuts and timing use the existing montage-v2 hybrid pipeline; the source Pro v3 subtitle presets are not imported here.",
+  "fits": "Speaker footage, Reels and Shorts",
+  "components": [
+    "talking",
+    "slide_full",
+    "speaker_circle",
+    "speaker_rect",
+    "card_over_blur",
+    "broll_own",
+    "cta"
+  ],
+  "render_scope": "Style is applied to HyperFrames full-screen slide_full scenes. Talking-head, subtitle and B-roll layers retain the reference montage treatment; this engine does not render Remotion mascot or virtual-camera compositions.",
+  "render": {
+    "bg": "linear-gradient(145deg,#111827,#26342C)",
+    "ink": "#FFFFFF",
+    "surface": "#26342C",
+    "border": "#A3E635",
+    "radius": "20px",
+    "shadow": "0 24px 56px rgba(0,0,0,.42)",
+    "texture": "linear-gradient(0deg,rgba(163,230,53,.07),transparent 45%)"
+  }
+}

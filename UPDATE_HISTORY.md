@@ -12,3 +12,14 @@
 [2026-09-25] telegram-bot-api-proxy (nginx: файлы local-режима по HTTP); @genesis_content_bot переведён на локальный Bot API (logOut облака, креды VuynFjARrXpGjLon + ogiJfZHCx5LEOPIe → http://telegram-bot-api-proxy)
 [2026-09-25] Ежечасная уборка временных файлов (scripts/cleanup_data.sh + cron); @dl_filemontage_wsbot переведён на локальный Bot API
 [2026-09-26] n8n-media-render: GSAP 3.15.0 по умолчанию (file:///opt/engines/vendor/gsap/, NODE_PATH), HYPERFRAMES_NO_UPDATE_CHECK=1 (HyperFrames закреплён на 0.8.30); коммит 85ad952
+[2026-10-19] GENESIS: production n8n обновлён до 2.44.4; воркфлоу 7 и 19 обновлены с сохранением активного состояния и бэкапов. В montage-v2 добавлен внутренний audio-prep endpoint (3387, доступен только в Docker-сети): credential n8n «Auphonic API», проверка типа аккаунта до запуска (платный аккаунт уходит на локальный FFmpeg), удаление бесплатного джингла, обрезка длинных пауз с пересчётом слов, FFmpeg fallback. Для контейнера n8n-media-render настроен Node proxy и перезапущен только этот контейнер. Изменения локальны и не закоммичены.
+
+[2026-10-20] montage-v2 0.5.4: reference fonts Unbounded/Inter (Cyrillic+Latin, OFL) для libass и HyperFrames; переданы 236 HyperFrames components; workflow 7 исправлен по execution #179199: выбирает очищенное видео и передаёт auto-style renderer; синтетические captions + slide_full QA пройдены.
+
+## 2026-11-16 — актуализация сборки
+- n8n по умолчанию `:latest` (update_n8n.sh собирает с `--pull`); Traefik `v3`.
+- Движки: Remotion 4.0.544, HyperFrames 0.9.56 (рендер на новой версии на сервере не проверен), GSAP 3.15.1, puppeteer-core 25.17.0, fontkit 3.0.0.
+- montage-v2 0.5.4 (17 стилей, EDL, audio-prep, QA-инспектор), шим `cleanup-genesis-job`, набор `beget/` для серверов с шаблоном Beget.
+- install.sh спрашивает `TELEGRAM_API_ID/HASH` (локальный Bot API, файлы до 2 ГБ ставится всегда).
+- RSSHub убран из compose; Дзен-публикатор в сборку не входит (приватный репозиторий).
+- README переписан, добавлен VIDEO_STYLES.md (стили и путь монтажа, идея `/opt/montage`).
