@@ -6,7 +6,7 @@
 |---|---|
 | На сервере | `/opt/n8n-install/fonts/` |
 | В `n8n-app`, `n8n-worker`, `n8n-media-render`, `n8n-tools` | `/opt/fonts/` (только чтение) |
-| Для fontconfig (Chromium, HyperFrames, Remotion, ffmpeg/libass) | `/usr/share/fonts/n8n/` в `n8n-media-render` и `n8n-tools` |
+| Для fontconfig (Chromium, HyperFrames, Remotion, ffmpeg/libass) | `/opt/fonts` в `n8n-media-render`, `/usr/share/fonts/n8n/` в `n8n-tools` |
 
 ```
 fonts/
@@ -46,9 +46,9 @@ ffmpeg -i in.mp4 -vf "drawtext=font='Montserrat\:style=Black':text='Привет
 | С засечками | Playfair Display, Lora, Merriweather, PT Serif, Noto Serif, EB Garamond, Cormorant, Prata, Spectral, Literata, Old Standard TT, Alice |
 | Моноширинные | JetBrains Mono, Fira Code, Roboto Mono, IBM Plex Mono, PT Mono, Source Code Pro |
 
-≈ 75 МБ, 166 файлов. Скачиваются с [github.com/google/fonts](https://github.com/google/fonts) (только нужные папки).
+≈ 75 МБ, 166 файлов. Уже лежат в готовом образе `n8n-media-render` — установщик копирует их оттуда в `/opt/n8n-install/fonts`. Если вы изменили `fonts.list`, они скачиваются заново с [github.com/google/fonts](https://github.com/google/fonts) (только нужные папки).
 
 ## Добавить шрифт
 
-- **Из Google Fonts:** найдите папку семейства в `google/fonts` (например `ofl/manrope`), допишите строку в `fonts.list`, затем `bash scripts/install-fonts.sh`. Скрипт предупредит, если папки нет или в шрифте нет кириллицы.
+- **Из Google Fonts:** найдите папку семейства в `google/fonts` (например `ofl/manrope`), допишите строку в `fonts.list`, затем `bash scripts/install-fonts.sh && docker exec n8n-media-render fc-cache -f`. Скрипт предупредит, если папки нет или в шрифте нет кириллицы.
 - **Свой файл:** положите в `/opt/n8n-install/fonts/custom/`, затем `docker exec n8n-media-render fc-cache -f`.

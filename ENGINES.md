@@ -8,7 +8,7 @@
 | Шим | Что запускает |
 |---|---|
 | `remotion` | Remotion CLI 4.0.544 |
-| `hyperframes` | HyperFrames 0.8.221 (браузер — `HYPERFRAMES_BROWSER_PATH`, ставит `install-extras.sh`) |
+| `hyperframes` | HyperFrames 0.8.221 (браузер в образе, `HYPERFRAMES_BROWSER_PATH`) |
 | `playwright`, `pw-node`, `pw-python` | Playwright 1.65.1: CLI, Node-скрипт, Python-скрипт |
 | `ffmpeg`, `ffprobe`, `fc-scan` | ffmpeg + libass, fontconfig |
 | `edge-tts`, `whisper` | озвучка и распознавание речи |

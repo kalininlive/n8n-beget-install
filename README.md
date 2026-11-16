@@ -145,7 +145,9 @@ flowchart LR
 
 ### Движки рендера (контейнер `n8n-media-render`, `Dockerfile.render`)
 
-База: `node:22-bookworm-slim` + системный Chromium + ffmpeg + шрифты (Inter, Noto, Noto Color Emoji, DejaVu, FreeFont, Rubik).
+**Готовый образ** `ghcr.io/kalininlive/n8n-media-render:stack-v2` — его собирает и проверяет GitHub Actions ([workflow](.github/workflows/media-render.yml)), установщик просто скачивает (~3 ГБ) параллельно со сборкой ядра. Нет доступа к ghcr.io — образ соберётся на сервере из `Dockerfile.render` (принудительно: `MEDIA_RENDER_BUILD=1`).
+
+Внутри: `node:22-bookworm-slim` + системный Chromium + ffmpeg + коллекция шрифтов `/opt/fonts` + браузер HyperFrames — на сервере ничего не докачивается.
 
 | Библиотека / движок | Версия | Что делает |
 |---|---|---|
@@ -238,7 +240,9 @@ bash install-extras.sh --check                         # только прове
 ```bash
 # n8n до последней версии: Telegram /update или
 bash update_n8n.sh        # build --pull, тег :latest остаётся
-# только движки (n8n не трогается)
+# только движки (n8n не трогается): свежий готовый образ рендера
+docker compose pull n8n-media-render && docker compose up -d n8n-media-render
+# или своя сборка (после правки Dockerfile.render)
 docker compose build n8n-media-render && docker compose up -d n8n-media-render
 ```
 
@@ -254,7 +258,8 @@ docker compose build n8n-media-render && docker compose up -d n8n-media-render
 ├── Dockerfile.n8n / .render / .tools  # образы
 ├── shims/                             # шимы вызова движков из n8n
 ├── docs/img/                          # картинки README
-├── fonts/                             # коллекция шрифтов → /opt/fonts (fonts.list в git, файлы качает scripts/install-fonts.sh)
+├── fonts/                             # коллекция шрифтов → /opt/fonts (fonts.list в git, файлы — из образа рендера)
+├── .github/workflows/                 # сборка и публикация образа n8n-media-render
 ├── edge-tts-custom/, telegram-bot-api/, searxng-settings.yml
 ├── bot/                               # админ-бот Telegram
 ├── scripts/                           # cleanup_data.sh, cron_backup.sh

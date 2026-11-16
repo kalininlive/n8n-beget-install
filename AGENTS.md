@@ -63,7 +63,7 @@ curl -fsS https://$DOMAIN/healthz
 |---|---|
 | `Порт 80/443 занят` | на сервере стоит nginx/apache из шаблона хостинга: `systemctl disable --now nginx apache2` (с согласия пользователя) |
 | SSL не выпускается | DNS ещё не указывает на сервер; после исправления: `docker restart n8n-traefik` |
-| не скачалась модель whisper / браузер HyperFrames / шрифты | нет доступа к huggingface.co / storage.googleapis.com / github.com — задать `PROXY_URL` в `.env`, затем `bash install-extras.sh` |
+| не скачалась модель whisper / образ рендера | нет доступа к huggingface.co / ghcr.io — задать `PROXY_URL` в `.env`, затем `bash install-extras.sh` |
 | `telegram-bot-api` не запущен | пустые `TELEGRAM_API_ID/HASH` в `.env` — вписать и `bash install-extras.sh` |
 | мало памяти при сборке | установщик сам создаёт swap 4 ГБ при RAM < 8 ГБ; при 2 ГБ RAM стек не потянет рендер |
 
