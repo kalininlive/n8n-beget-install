@@ -85,7 +85,7 @@ prepare_files() {
 ensure_media_image() {
   local img; img=$(docker compose config --images 2>/dev/null | grep media-render)
   if [ "${MEDIA_RENDER_BUILD:-0}" != "1" ]; then
-    log "  образ n8n-media-render: скачиваю готовый ($img, ~3 ГБ)"
+    log "  образ n8n-media-render: скачиваю готовый ($img, ~1,5 ГБ, на диске ~4 ГБ)"
     docker compose pull -q n8n-media-render >/dev/null 2>&1 || true
     if docker image inspect "$img" >/dev/null 2>&1; then log "  образ n8n-media-render: готов"; return 0; fi
     log "  ⚠ не скачался — собираю локально"

@@ -145,7 +145,7 @@ flowchart LR
 
 ### Движки рендера (контейнер `n8n-media-render`, `Dockerfile.render`)
 
-**Готовый образ** `ghcr.io/kalininlive/n8n-media-render:stack-v2` — его собирает и проверяет GitHub Actions ([workflow](.github/workflows/media-render.yml)), установщик просто скачивает (~3 ГБ) параллельно со сборкой ядра. Нет доступа к ghcr.io — образ соберётся на сервере из `Dockerfile.render` (принудительно: `MEDIA_RENDER_BUILD=1`).
+**Готовый образ** `ghcr.io/kalininlive/n8n-media-render:stack-v2` — его собирает и проверяет GitHub Actions ([workflow](.github/workflows/media-render.yml)), установщик просто скачивает (~1,5 ГБ, на диске ~4 ГБ) параллельно со сборкой ядра. Нет доступа к ghcr.io — образ соберётся на сервере из `Dockerfile.render` (принудительно: `MEDIA_RENDER_BUILD=1`).
 
 Внутри: `node:22-bookworm-slim` + системный Chromium + ffmpeg + коллекция шрифтов `/opt/fonts` + браузер HyperFrames — на сервере ничего не докачивается.
 
