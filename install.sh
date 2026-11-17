@@ -201,6 +201,8 @@ fi
 ### 2. Система: пакеты, swap, firewall, Docker
 section "Установка: система и Docker"
 export DEBIAN_FRONTEND=noninteractive
+mkdir -p /etc/apt/apt.conf.d
+echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4
 apt-get update -qq
 apt-get install -y -qq ca-certificates curl git jq openssl zip cron >/dev/null
 SWAP_MB=$(awk '/SwapTotal/{print int($2/1024)}' /proc/meminfo)
@@ -265,7 +267,9 @@ chown -R 1000:1000 logs backups
 chmod -R 755 logs backups
 chmod +x shims/* backup_n8n.sh update_n8n.sh install-extras.sh scripts/*.sh
 # docker-compose как cli-plugin для контейнера n8n-bot (он запускает update_n8n.sh у себя)
-[ -f /usr/libexec/docker/cli-plugins/docker-compose ] && cp -f /usr/libexec/docker/cli-plugins/docker-compose docker-plugins/docker-compose
+for p in /usr/libexec/docker/cli-plugins/docker-compose /usr/lib/docker/cli-plugins/docker-compose /usr/local/lib/docker/cli-plugins/docker-compose; do
+  [ -f "$p" ] && cp -f "$p" docker-plugins/docker-compose && break
+done
 
 ### 6. Подготовка движков: секреты sandbox/searxng, NO_PROXY, движки монтажа, шрифты
 bash ./install-extras.sh --prepare-only
@@ -297,7 +301,10 @@ ok "Бэкап воркфлоу и кредов: ежедневно в 02:00 →
 
 ### 10. Итог
 SSL_OK=0
-curl -fsS --max-time 10 -o /dev/null "https://$DOMAIN/healthz" 2>/dev/null && SSL_OK=1
+for s in $(seq 1 6); do
+  curl -fsS --max-time 5 -o /dev/null "https://$DOMAIN/healthz" 2>/dev/null && { SSL_OK=1; break; }
+  sleep 5
+done
 STATUS="$([ $CHECK_OK = 1 ] && echo '🟢 все проверки пройдены' || echo '🟡 есть замечания — см. журнал')"
 curl -s -X POST "https://api.telegram.org/bot$TG_BOT_TOKEN/sendMessage" -d chat_id="$TG_USER_ID" \
   --data-urlencode text="✅ n8n установлен: https://$DOMAIN
