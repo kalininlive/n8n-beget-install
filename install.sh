@@ -61,10 +61,10 @@ echo "Журнал установки: $LOG_FILE"
 
 ### 0. Проверка сервера
 section "0/5  Проверка сервера"
-if pgrep -f unattended-upgrade >/dev/null 2>&1; then
+if pgrep -f '/usr/bin/unattended-upgrade' >/dev/null 2>&1; then
   warn "На сервере выполняется первичное фоновое обновление Ubuntu (unattended-upgrades)..."
   echo "   Жду завершения, чтобы пакетный менеджер не блокировался и службы не перезапускались..."
-  while pgrep -f unattended-upgrade >/dev/null 2>&1; do sleep 5; done
+  while pgrep -f '/usr/bin/unattended-upgrade' >/dev/null 2>&1; do sleep 5; done
   ok "Фоновое обновление системы завершено"
 fi
 . /etc/os-release 2>/dev/null || die "Не удалось определить ОС"
