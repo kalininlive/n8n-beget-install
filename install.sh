@@ -1,1225 +1,337 @@
 #!/bin/bash
 # ============================================================
-# n8n Universal Auto-Install Script v4.0
-# Чистая установка на Ubuntu 22.04 / 24.04
+# n8n-beget-install — полный боевой стек n8n одной командой
+#   Ubuntu 24.04 LTS (рекомендуется) · 22.04 LTS · 26.04 LTS, x86_64
+#   n8n (queue mode) + Postgres + Redis + Traefik (HTTPS) + админ-бот Telegram
+#   + движки: n8n-media-render (Remotion, HyperFrames, GSAP, Playwright, ffmpeg)
+#     n8n-tools (ffmpeg/yt-dlp/python), edge-tts, faster-whisper, SearXNG, n8n Sandbox,
+#     локальный Telegram Bot API (файлы до 2 ГБ), коллекция шрифтов /opt/fonts
+#
+# Интерактивно:
+#   bash <(curl -fsSL https://raw.githubusercontent.com/kalininlive/n8n-beget-install/stack-v2/install.sh)
+# Без вопросов (агент / CI) — все ответы переменными окружения, см. AGENTS.md:
+#   curl -fsSL …/install.sh -o install.sh && DOMAIN=… EMAIL=… TG_BOT_TOKEN=… TG_USER_ID=… \
+#     TELEGRAM_API_ID=… TELEGRAM_API_HASH=… NONINTERACTIVE=1 bash install.sh
+# Повторный запуск безопасен: существующий .env (ключ шифрования, пароли) сохраняется.
 # ============================================================
-# Компоненты: n8n 2.x + PostgreSQL 16 + Redis 7 + Traefik v3
-#             + Telegram Bot
-#             + FFmpeg + Python3 + Chromium + Tesseract OCR
-#             + 30+ npm-библиотек для AI/ML/автоматизации
-# ============================================================
-
 set -euo pipefail
 
-# ─── Цвета ───────────────────────────────────────────────────
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-NC='\033[0m'
+REPO_URL="${REPO_URL:-https://github.com/kalininlive/n8n-beget-install.git}"
+REPO_BRANCH="${REPO_BRANCH:-stack-v2}"   # после слияния stack-v2 -> main поменять на main
+INSTALL_DIR="/opt/n8n-install"
+LOG_FILE="/var/log/n8n-install.log"
 
-log_info()    { echo -e "${BLUE}[INFO]${NC}  $(date '+%H:%M:%S') $1"; }
-log_ok()      { echo -e "${GREEN}[OK]${NC}    $(date '+%H:%M:%S') $1"; }
-log_warn()    { echo -e "${YELLOW}[WARN]${NC}  $(date '+%H:%M:%S') $1"; }
-log_error()   { echo -e "${RED}[ERROR]${NC} $(date '+%H:%M:%S') $1"; }
-log_step()    { echo -e "\n${CYAN}${BOLD}═══ $1 ═══${NC}\n"; }
+die()  { echo "❌ $*" >&2; exit 1; }
+warn() { echo "⚠️  $*"; }
+ok()   { echo "✅ $*"; }
+section() { echo; echo "━━━ $1 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; }
 
-# ─── Ловушка ошибок ──────────────────────────────────────────
-trap 'log_error "Скрипт прервался на строке $LINENO. Последняя команда: $BASH_COMMAND"' ERR
+(( EUID == 0 )) || die "Запустите от root: sudo bash install.sh"
 
-# ─── Директория установки ────────────────────────────────────
-INSTALL_DIR="/opt/websansay/n8n"
+# есть ли живой терминал для вопросов (агент по SSH без TTY → только переменные окружения)
+HAVE_TTY=0
+if [ "${NONINTERACTIVE:-0}" != "1" ] && { : </dev/tty; } 2>/dev/null; then HAVE_TTY=1; fi
 
-# ============================================================
-# PREFLIGHT CHECKS
-# ============================================================
-log_step "Предварительные проверки"
+# ask VAR "вопрос" — спрашивает, только если переменная ещё не задана
+ask() {
+  local var="$1" prompt="$2"
+  if [ -n "${!var:-}" ]; then echo "   ↳ $var: задан заранее"; return; fi
+  if [ "$HAVE_TTY" = 1 ]; then read -r -p "$prompt" "$var" </dev/tty || true; fi
+  printf -v "$var" '%s' "${!var:-}"
+}
+# confirm "вопрос" — да/нет; без терминала — «да» только при FORCE=1
+confirm() {
+  [ "${FORCE:-0}" = 1 ] && return 0
+  [ "$HAVE_TTY" = 1 ] || return 1
+  local a; read -r -p "$1 [y/N]: " a </dev/tty || true; [[ "$a" =~ ^[YyДд] ]]
+}
 
-# Root
-if [[ $EUID -ne 0 ]]; then
-    log_error "Запустите от root: sudo bash install.sh"
-    exit 1
-fi
+touch "$LOG_FILE" && chmod 600 "$LOG_FILE"
+exec > >(tee -a "$LOG_FILE") 2>&1
 
-# ОС
-if ! grep -qE "Ubuntu (22|24)" /etc/os-release 2>/dev/null; then
-    log_warn "Рекомендуется Ubuntu 22.04 или 24.04. Текущая ОС может не поддерживаться."
-    read -p "Продолжить? (y/n): " -r
-    [[ ! $REPLY =~ ^[Yy]$ ]] && exit 0
-fi
-
-# Свободное место
-DISK_FREE=$(df -BG / | awk 'NR==2{print $4}' | tr -d 'G')
-if (( DISK_FREE < 10 )); then
-    log_error "Недостаточно места на диске: ${DISK_FREE}G свободно (нужно минимум 10G)"
-    exit 1
-fi
-
-log_ok "ОС: $(grep PRETTY_NAME /etc/os-release | cut -d'"' -f2)"
-log_ok "Свободно на диске: ${DISK_FREE}G"
-
-# ============================================================
-# БАННЕР
-# ============================================================
-clear
-echo ""
-echo -e "${CYAN}"
-cat << 'BANNER'
-    ███╗   ██╗ █████╗ ███╗   ██╗
-    ████╗  ██║██╔══██╗████╗  ██║
-    ██╔██╗ ██║╚█████╔╝██╔██╗ ██║
-    ██║╚██╗██║██╔══██╗██║╚██╗██║
-    ██║ ╚████║╚█████╔╝██║ ╚████║
-    ╚═╝  ╚═══╝ ╚════╝ ╚═╝  ╚═══╝
+[ "$HAVE_TTY" = 1 ] && clear || true
+cat <<'BANNER'
+╔══════════════════════════════════════════════════════════════╗
+║   🌌  n8n + движки рендера — автоматическая установка         ║
+║   n8n · Postgres · Redis · Traefik · Remotion · HyperFrames   ║
+║   ffmpeg · edge-tts · whisper · Telegram Bot API (до 2 ГБ)    ║
+╚══════════════════════════════════════════════════════════════╝
 BANNER
-echo -e "${NC}"
-echo -e "${BOLD}    Universal Auto-Install v4.0${NC}"
-echo -e "    n8n 2.x + PostgreSQL + Redis + Traefik SSL + Telegram Bot"
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
+echo "Журнал установки: $LOG_FILE"
 
-# ============================================================
-# ВВОД ДАННЫХ
-# ============================================================
-log_step "Настройка параметров"
-
-# --- 1. Домен n8n ---
-read -p "Домен для n8n (например n8n.example.com): " DOMAIN
-while [[ -z "$DOMAIN" ]]; do
-    log_error "Домен не может быть пустым"
-    read -p "Домен для n8n: " DOMAIN
+### 0. Проверка сервера
+section "0/5  Проверка сервера"
+if pgrep -f '/usr/bin/unattended-upgrade' >/dev/null 2>&1; then
+  warn "На сервере выполняется первичное фоновое обновление Ubuntu (unattended-upgrades)..."
+  echo "   Жду завершения, чтобы пакетный менеджер не блокировался и службы не перезапускались..."
+  while pgrep -f '/usr/bin/unattended-upgrade' >/dev/null 2>&1; do sleep 5; done
+  ok "Фоновое обновление системы завершено"
+fi
+. /etc/os-release 2>/dev/null || die "Не удалось определить ОС"
+case "${ID:-}:${VERSION_ID:-}" in
+  ubuntu:24.04) ok "Ubuntu 24.04 LTS — рекомендуемая версия" ;;
+  ubuntu:22.04|ubuntu:26.04) ok "Ubuntu ${VERSION_ID} LTS — поддерживается" ;;
+  ubuntu:*) warn "Ubuntu ${VERSION_ID} — не LTS, не проверялась. Рекомендуется 24.04 LTS."
+            confirm "Продолжить на свой риск?" || die "Остановлено. Переустановите сервер на Ubuntu 24.04 LTS." ;;
+  debian:12|debian:13) warn "Debian ${VERSION_ID} — должно работать, но проверялось только на Ubuntu."
+            confirm "Продолжить?" || die "Остановлено." ;;
+  *) die "Поддерживается Ubuntu 22.04 / 24.04 / 26.04 LTS (у вас: ${PRETTY_NAME:-неизвестно})" ;;
+esac
+ARCH=$(uname -m)
+[ "$ARCH" = x86_64 ] || die "Нужен процессор x86_64 (amd64), у вас $ARCH: браузер рендера HyperFrames есть только под x86_64"
+RAM_MB=$(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo)
+DISK_GB=$(df -BG --output=avail / | tail -1 | tr -dc 0-9)
+CPU=$(nproc)
+echo "   CPU: $CPU · RAM: ${RAM_MB} МБ · свободно на диске: ${DISK_GB} ГБ"
+(( RAM_MB >= 3500 )) || { warn "RAM меньше 4 ГБ — рендер видео будет падать. Минимум 4 ГБ, комфортно 8 ГБ."; confirm "Продолжить?" || die "Остановлено."; }
+(( DISK_GB >= 25 ))  || { warn "Свободно меньше 25 ГБ — образы, модели и шрифты занимают ~15 ГБ, плюс место под видео."; confirm "Продолжить?" || die "Остановлено."; }
+(( CPU >= 2 ))       || warn "1 ядро CPU — рендер будет очень медленным (рекомендуется 4+)."
+for port in 80 443; do
+  if ss -ltnH "sport = :$port" 2>/dev/null | grep -q .; then
+    proc=$(ss -ltnpH "sport = :$port" 2>/dev/null | grep -o 'users:(("[^"]*' | head -1 | cut -d'"' -f2)
+    [ "$proc" = docker-proxy ] && continue   # уже наш Traefik (повторный запуск)
+    warn "Порт $port занят процессом ${proc:-?} (часто nginx/apache из шаблона хостинга). Traefik не сможет получить SSL."
+    confirm "Остановить и отключить ${proc:-этот сервис}?" && { systemctl disable --now "${proc:-nginx}" 2>/dev/null || systemctl disable --now nginx apache2 2>/dev/null || true; } \
+      || die "Освободите порт $port и запустите снова."
+  fi
 done
 
-# --- 2. Email ---
-read -p "Email для SSL сертификата: " EMAIL
-while ! echo "$EMAIL" | grep -qE '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'; do
-    log_error "Некорректный email"
-    read -p "Email: " EMAIL
-done
-
-# --- 3. Telegram Bot Token ---
-echo ""
-read -p "Telegram Bot Token (от @BotFather, Enter для пропуска): " TG_BOT_TOKEN
-TG_BOT_TOKEN="${TG_BOT_TOKEN:-}"
-
-# --- 4. Telegram User ID ---
-read -p "Telegram User ID (от @userinfobot, Enter для пропуска): " TG_USER_ID
-TG_USER_ID="${TG_USER_ID:-}"
-
-if [[ -z "$TG_BOT_TOKEN" ]] || [[ -z "$TG_USER_ID" ]]; then
-    log_warn "Telegram бот не настроен (можно добавить позже в .env)"
-fi
-
-# ============================================================
-# АВТОГЕНЕРАЦИЯ ВСЕХ ПАРАМЕТРОВ
-# ============================================================
-log_step "Генерация конфигурации"
-
-# Все пароли и ключи
-DB_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
-ENCRYPTION_KEY=$(openssl rand -hex 32)
-REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
-log_ok "Пароли и ключ шифрования сгенерированы"
-
-# Таймзона и прокси — дефолты
-TIMEZONE="Europe/Moscow"
-PROXY_URL=""
-
-# ============================================================
-# ПОДТВЕРЖДЕНИЕ
-# ============================================================
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo -e "${BOLD}Параметры установки:${NC}"
-echo ""
-echo -e "  n8n:             ${CYAN}https://${DOMAIN}${NC}"
-echo -e "  Email:           ${EMAIL}"
-echo -e "  Таймзона:        ${TIMEZONE}"
-echo -e "  Telegram бот:    $([ -n "$TG_BOT_TOKEN" ] && echo "✅" || echo "❌ пропущен")"
-echo -e "  Директория:      ${INSTALL_DIR}"
-echo ""
-echo -e "  ${YELLOW}⚠ DNS A-запись домена должна указывать на этот сервер${NC}"
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-read -p "Начать установку? (y/n): " -r
-[[ ! $REPLY =~ ^[Yy]$ ]] && { echo "Отменено."; exit 0; }
-
-# ============================================================
-# 1. ОБНОВЛЕНИЕ СИСТЕМЫ
-# ============================================================
-log_step "1/11 · Обновление системы"
-
-export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq
-apt-get upgrade -y -qq
-apt-get install -y -qq \
-    apt-transport-https ca-certificates curl gnupg lsb-release \
-    git jq openssl cron software-properties-common
-
-log_ok "Система обновлена"
-
-# ============================================================
-# 2. SWAP (если нет)
-# ============================================================
-log_step "2/11 · Настройка SWAP"
-
-TOTAL_RAM=$(free -m | awk '/^Mem:/{print $2}')
-
-if swapon --show | grep -q '/'; then
-    SWAP_SIZE=$(free -m | awk '/^Swap:/{print $2}')
-    log_ok "SWAP уже настроен: ${SWAP_SIZE}MB"
-else
-    if (( TOTAL_RAM < 4096 )); then
-        SWAP_GB=4
-    else
-        SWAP_GB=2
-    fi
-    log_info "Создание SWAP ${SWAP_GB}GB (RAM: ${TOTAL_RAM}MB)..."
-
-    fallocate -l ${SWAP_GB}G /swapfile
-    chmod 600 /swapfile
-    mkswap /swapfile
-    swapon /swapfile
-
-    if ! grep -q '/swapfile' /etc/fstab; then
-        echo '/swapfile none swap sw 0 0' >> /etc/fstab
-    fi
-
-    sysctl -w vm.swappiness=10 > /dev/null
-    grep -q 'vm.swappiness' /etc/sysctl.conf || echo 'vm.swappiness=10' >> /etc/sysctl.conf
-
-    log_ok "SWAP ${SWAP_GB}GB создан"
-fi
-
-# ============================================================
-# 3. УСТАНОВКА DOCKER
-# ============================================================
-log_step "3/11 · Установка Docker Engine"
-
-if command -v docker &>/dev/null && docker --version &>/dev/null; then
-    log_ok "Docker уже установлен: $(docker --version)"
-else
-    # Удаление старых версий
-    for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc; do
-        apt-get remove -y -qq "$pkg" 2>/dev/null || true
-    done
-
-    # Добавление репозитория Docker
-    install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-    chmod a+r /etc/apt/keyrings/docker.asc
-
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
-        $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
-        tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-    apt-get update -qq
-    apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-    systemctl enable docker
-    systemctl start docker
-
-    # Ждём запуска
-    for i in {1..10}; do
-        systemctl is-active --quiet docker && break
-        sleep 1
-    done
-
-    log_ok "Docker установлен: $(docker --version)"
-fi
-
-# Проверка Docker Compose
-if ! docker compose version &>/dev/null; then
-    log_error "Docker Compose plugin не установлен"
-    exit 1
-fi
-log_ok "Docker Compose: $(docker compose version --short)"
-
-# ============================================================
-# 4. СТРУКТУРА ДИРЕКТОРИЙ
-# ============================================================
-log_step "4/11 · Создание структуры проекта"
-
-mkdir -p "$INSTALL_DIR"/{bot,logs,backups,shims,n8n-files,data}
-
-# Права для n8n (UID 1000 = пользователь node в контейнере)
-chown -R 1000:1000 "$INSTALL_DIR/n8n-files"
-chown -R 1000:1000 "$INSTALL_DIR/data"
-chmod -R u+rwX,g+rwX "$INSTALL_DIR/n8n-files"
-chmod -R u+rwX,g+rwX "$INSTALL_DIR/data"
-
-log_ok "Структура создана: $INSTALL_DIR"
-
-# ============================================================
-# 5. .ENV ФАЙЛ
-# ============================================================
-log_step "5/11 · Создание конфигурации .env"
-
-cat > "$INSTALL_DIR/.env" << ENVEOF
-# ============================================================
-# n8n v4 — Полная конфигурация
-# Создано: $(date '+%Y-%m-%d %H:%M:%S')
-# ============================================================
-
-# ─── ДОМЕН ───────────────────────────────────────────────────
-DOMAIN=${DOMAIN}
-
-# ─── SSL ─────────────────────────────────────────────────────
-EMAIL=${EMAIL}
-
-# ─── POSTGRESQL ──────────────────────────────────────────────
-POSTGRES_USER=n8n
-POSTGRES_PASSWORD=${DB_PASSWORD}
-POSTGRES_DB=n8n
-
-# ─── REDIS ───────────────────────────────────────────────────
-REDIS_PASSWORD=${REDIS_PASSWORD}
-
-# ─── N8N CORE ───────────────────────────────────────────────
-N8N_ENCRYPTION_KEY=${ENCRYPTION_KEY}
-WEBHOOK_URL=https://${DOMAIN}/
-
-# Binary data на файловой системе (производительнее чем в БД)
-N8N_BINARY_DATA_MODE=filesystem
-N8N_DEFAULT_BINARY_DATA_MODE=filesystem
-
-# Proxy settings для Traefik
-N8N_EXPRESS_TRUST_PROXY=true
-N8N_TRUSTED_PROXIES=*
-N8N_PROXY_HOPS=1
-
-# ─── N8N 2.x SECURITY ──────────────────────────────────────
-# Execute Command и Local File Trigger разрешены
-NODES_EXCLUDE=[]
-# Whitelist путей для Read/Write Binary Files
-N8N_RESTRICT_FILE_ACCESS_TO=/home/node/.n8n-files;/data
-# Task runners (false = быстрее, true = безопаснее)
-N8N_RUNNERS_ENABLED=false
-
-# ─── N8N LIMITS ─────────────────────────────────────────────
-N8N_PAYLOAD_SIZE_MAX=512
-N8N_FORMDATA_FILE_SIZE_MAX=2048
-N8N_RUNNERS_TASK_TIMEOUT=1800
-EXECUTIONS_TIMEOUT=-1
-EXECUTIONS_TIMEOUT_MAX=14400
-
-# Community packages
-N8N_COMMUNITY_PACKAGES_ENABLED=true
-
-# ─── ВНЕШНИЙ ПРОКСИ ────────────────────────────────────────
-PROXY_URL=${PROXY_URL}
-NO_PROXY=localhost,127.0.0.1,::1,.local,postgres,redis,traefik,n8n,n8n-postgres,n8n-redis,n8n-traefik
-
-# ─── TELEGRAM BOT ──────────────────────────────────────────
-TG_BOT_TOKEN=${TG_BOT_TOKEN}
-TG_USER_ID=${TG_USER_ID}
-
-# ─── БЭКАПЫ ────────────────────────────────────────────────
-BACKUP_RETENTION_DAYS=7
-
-# ─── TIMEZONE ──────────────────────────────────────────────
-GENERIC_TIMEZONE=${TIMEZONE}
-TZ=${TIMEZONE}
-
-# ─── N8N MISC ──────────────────────────────────────────────
-N8N_METRICS=true
-N8N_LOG_LEVEL=info
-N8N_DIAGNOSTICS_ENABLED=false
-N8N_PERSONALIZATION_ENABLED=false
-
-# ─── QUEUE MODE ────────────────────────────────────────────
-EXECUTIONS_MODE=queue
-QUEUE_BULL_REDIS_HOST=n8n-redis
-QUEUE_BULL_REDIS_PORT=6379
-ENVEOF
-
-chmod 600 "$INSTALL_DIR/.env"
-log_ok ".env создан"
-
-# ============================================================
-# 6. DOCKERFILE.N8N
-# ============================================================
-log_step "6/11 · Создание Dockerfile.n8n"
-
-# Определяем Docker GID хоста
-DOCKER_GID=$(getent group docker | cut -d: -f3 || echo "999")
-
-cat > "$INSTALL_DIR/Dockerfile.n8n" << 'DEOF'
-# ============================================================
-# n8n Custom Build — Multi-Stage (Hardened Image)
-# Stage 1: Alpine builder — устанавливаем все пакеты
-# Stage 2: Hardened n8n — копируем через tar
-# ============================================================
-
-# ─── STAGE 1: Builder ──────────────────────────────────────
-FROM alpine:3.22 AS builder
-
-RUN apk add --no-cache \
-    bash curl wget git make g++ gcc \
-    python3 py3-pip libffi-dev \
-    ffmpeg \
-    chromium chromium-chromedriver \
-    font-noto font-noto-cjk font-noto-emoji \
-    imagemagick ghostscript graphicsmagick \
-    poppler-utils \
-    tesseract-ocr tesseract-ocr-data-rus tesseract-ocr-data-eng \
-    jq apache2-utils \
-    fontconfig ttf-freefont \
-    docker-cli
-
-# Пакуем все инструменты в tar (follow symlinks с -h)
-RUN mkdir -p /export && tar chf /export/tools.tar \
-    /usr/bin/ffmpeg /usr/bin/ffprobe \
-    /usr/bin/python3 /usr/bin/python3.12 \
-    /usr/bin/chromium-browser /usr/lib/chromium/ \
-    /usr/bin/chromedriver \
-    /usr/bin/convert /usr/bin/magick /usr/bin/identify \
-    /usr/bin/gs /usr/bin/gm \
-    /usr/bin/pdftotext /usr/bin/pdftoppm \
-    /usr/bin/tesseract \
-    /usr/bin/jq /usr/bin/htpasswd \
-    /usr/bin/docker \
-    /usr/bin/git \
-    /usr/lib/lib*.so* \
-    /usr/lib/python3.12/ \
-    /usr/lib/tesseract-ocr/ \
-    /usr/share/tessdata/ \
-    /usr/share/fonts/ \
-    /usr/lib/ImageMagick*/ \
-    /usr/lib/graphicsmagick*/ \
-    /etc/ImageMagick*/ \
-    /etc/fonts/ \
-    /lib/lib*.so* \
-    2>/dev/null ; true
-
-# ─── STAGE 2: Hardened n8n ─────────────────────────────────
-FROM docker.n8n.io/n8nio/n8n:latest
-
-USER root
-
-# Распаковываем инструменты
-COPY --from=builder /export/tools.tar /tmp/tools.tar
-RUN tar xf /tmp/tools.tar -C / 2>/dev/null ; rm -f /tmp/tools.tar ; true
-
-# ─── Docker группа ──────────────────────────────────────────
-ARG DOCKER_GID=999
-RUN set -eux; \
-    addgroup -S -g ${DOCKER_GID} docker 2>/dev/null || true; \
-    adduser node docker 2>/dev/null || true
-
-# ─── npm config ─────────────────────────────────────────────
-RUN npm config set fund false && npm config set audit false
-
-# ─── npm глобальные пакеты ──────────────────────────────────
-RUN for pkg in \
-    axios node-fetch form-data \
-    moment date-fns lodash \
-    fs-extra csv-parser xml2js js-yaml xlsx \
-    jsonwebtoken simple-oauth2 uuid \
-    openai langchain \
-    node-telegram-bot-api discord.js vk-io \
-    fluent-ffmpeg \
-    google-tts-api \
-    mongoose ioredis \
-    bcrypt validator joi \
-    winston dotenv prom-client \
-    node-downloader-helper adm-zip archiver \
-    puppeteer-core \
-  ; do \
-    echo "📦 $pkg..." && npm install -g "$pkg" 2>/dev/null || echo "⚠️  skip $pkg"; \
+### 1. Ввод данных
+# повторный запуск: берём значения из существующего .env (ключ шифрования терять нельзя — пропадут все креды n8n)
+if [ -f "$INSTALL_DIR/.env" ]; then
+  echo "ℹ️  Найден $INSTALL_DIR/.env — значения из него используются по умолчанию."
+  for k in DOMAIN EMAIL POSTGRES_PASSWORD N8N_ENCRYPTION_KEY TG_BOT_TOKEN TG_USER_ID TELEGRAM_API_ID TELEGRAM_API_HASH PROXY_URL; do
+    [ -n "${!k:-}" ] && continue
+    v=$(grep -m1 "^${k}=" "$INSTALL_DIR/.env" | cut -d= -f2- || true)
+    [ -n "$v" ] && printf -v "$k" '%s' "$v"
   done
+fi
 
-# ─── Локальные пакеты для Code-нод ─────────────────────────
-RUN cd /tmp && npm install oauth-1.0a && \
-    cp -r node_modules/oauth-1.0a /usr/local/lib/node_modules/ && \
-    rm -rf /tmp/node_modules /tmp/package*.json
-
-# ─── Puppeteer / Chromium ───────────────────────────────────
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser \
-    CHROME_PATH=/usr/bin/chromium-browser \
-    N8N_USER_FOLDER=/home/node/.n8n
-
-USER node
-WORKDIR /home/node
-DEOF
-
-log_ok "Dockerfile.n8n создан"
-
-# ============================================================
-# 7. DOCKER-COMPOSE.YML
-# ============================================================
-log_step "7/11 · Создание docker-compose.yml"
-
-cat > "$INSTALL_DIR/docker-compose.yml" << 'COMPOSEOF'
-# ============================================================
-# n8n Full Stack — docker-compose.yml
-# ============================================================
-
-x-n8n-env: &n8n-env
-  # Домен
-  N8N_HOST: ${DOMAIN}
-  N8N_PORT: 5678
-  N8N_PROTOCOL: https
-  WEBHOOK_URL: ${WEBHOOK_URL}
-  # Шифрование
-  N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
-  # PostgreSQL
-  DB_TYPE: postgresdb
-  DB_POSTGRESDB_HOST: n8n-postgres
-  DB_POSTGRESDB_PORT: 5432
-  DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
-  DB_POSTGRESDB_USER: ${POSTGRES_USER}
-  DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
-  # Redis queue
-  EXECUTIONS_MODE: ${EXECUTIONS_MODE}
-  QUEUE_BULL_REDIS_HOST: ${QUEUE_BULL_REDIS_HOST}
-  QUEUE_BULL_REDIS_PORT: ${QUEUE_BULL_REDIS_PORT}
-  QUEUE_BULL_REDIS_PASSWORD: ${REDIS_PASSWORD}
-  # Binary data
-  N8N_BINARY_DATA_MODE: ${N8N_BINARY_DATA_MODE}
-  N8N_DEFAULT_BINARY_DATA_MODE: ${N8N_DEFAULT_BINARY_DATA_MODE}
-  # Proxy (Traefik)
-  N8N_EXPRESS_TRUST_PROXY: ${N8N_EXPRESS_TRUST_PROXY}
-  N8N_TRUSTED_PROXIES: ${N8N_TRUSTED_PROXIES}
-  N8N_PROXY_HOPS: ${N8N_PROXY_HOPS}
-  # Внешний прокси
-  HTTP_PROXY: ${PROXY_URL:-}
-  HTTPS_PROXY: ${PROXY_URL:-}
-  NO_PROXY: ${NO_PROXY}
-  # Timezone
-  GENERIC_TIMEZONE: ${GENERIC_TIMEZONE}
-  TZ: ${TZ}
-  # Misc
-  N8N_METRICS: ${N8N_METRICS}
-  N8N_LOG_LEVEL: ${N8N_LOG_LEVEL}
-  N8N_DIAGNOSTICS_ENABLED: ${N8N_DIAGNOSTICS_ENABLED}
-  N8N_PERSONALIZATION_ENABLED: ${N8N_PERSONALIZATION_ENABLED}
-  # n8n 2.x security
-  NODES_EXCLUDE: ${NODES_EXCLUDE}
-  N8N_RESTRICT_FILE_ACCESS_TO: ${N8N_RESTRICT_FILE_ACCESS_TO}
-  N8N_RUNNERS_ENABLED: ${N8N_RUNNERS_ENABLED}
-  # Limits
-  N8N_PAYLOAD_SIZE_MAX: ${N8N_PAYLOAD_SIZE_MAX:-512}
-  N8N_FORMDATA_FILE_SIZE_MAX: ${N8N_FORMDATA_FILE_SIZE_MAX:-2048}
-  N8N_RUNNERS_TASK_TIMEOUT: ${N8N_RUNNERS_TASK_TIMEOUT:-1800}
-  EXECUTIONS_TIMEOUT: ${EXECUTIONS_TIMEOUT:--1}
-  EXECUTIONS_TIMEOUT_MAX: ${EXECUTIONS_TIMEOUT_MAX:-14400}
-  N8N_COMMUNITY_PACKAGES_ENABLED: ${N8N_COMMUNITY_PACKAGES_ENABLED:-true}
-
-x-n8n-volumes: &n8n-volumes
-  - n8n_data:/home/node/.n8n
-  - ./logs:/logs
-  - ./n8n-files:/home/node/.n8n-files
-  - ./data:/data
-
-services:
-  # ──────────────────────────────────────────────────────────
-  # n8n — Главное приложение
-  # ──────────────────────────────────────────────────────────
-  n8n:
-    build:
-      context: .
-      dockerfile: Dockerfile.n8n
-      args:
-        DOCKER_GID: ${DOCKER_GID:-999}
-    container_name: n8n
-    restart: unless-stopped
-    environment:
-      <<: *n8n-env
-    volumes:
-      - n8n_data:/home/node/.n8n
-      - ./logs:/logs
-      - ./n8n-files:/home/node/.n8n-files
-      - ./data:/data
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    depends_on:
-      n8n-postgres:
-        condition: service_healthy
-      n8n-redis:
-        condition: service_healthy
-    labels:
-      - "traefik.enable=true"
-      # HTTPS
-      - "traefik.http.routers.n8n.rule=Host(`${DOMAIN}`)"
-      - "traefik.http.routers.n8n.entrypoints=websecure"
-      - "traefik.http.routers.n8n.tls.certresolver=letsencrypt"
-      - "traefik.http.services.n8n.loadbalancer.server.port=5678"
-      # HTTP → HTTPS redirect
-      - "traefik.http.routers.n8n-http.rule=Host(`${DOMAIN}`)"
-      - "traefik.http.routers.n8n-http.entrypoints=web"
-      - "traefik.http.routers.n8n-http.middlewares=redirect-https"
-      - "traefik.http.middlewares.redirect-https.redirectscheme.scheme=https"
-    networks:
-      - n8n-net
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5678/healthz"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 90s
-
-  # ──────────────────────────────────────────────────────────
-  # n8n-worker — Воркер для queue mode
-  # ──────────────────────────────────────────────────────────
-  n8n-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile.n8n
-      args:
-        DOCKER_GID: ${DOCKER_GID:-999}
-    container_name: n8n-worker
-    restart: unless-stopped
-    command: worker
-    environment:
-      <<: *n8n-env
-    volumes:
-      - n8n_data:/home/node/.n8n
-      - ./logs:/logs
-      - ./n8n-files:/home/node/.n8n-files
-      - ./data:/data
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    depends_on:
-      n8n:
-        condition: service_healthy
-    networks:
-      - n8n-net
-
-  # ──────────────────────────────────────────────────────────
-  # PostgreSQL 16
-  # ──────────────────────────────────────────────────────────
-  n8n-postgres:
-    image: postgres:16-alpine
-    container_name: n8n-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-      TZ: ${TZ}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - n8n-net
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-
-  # ──────────────────────────────────────────────────────────
-  # Redis 7
-  # ──────────────────────────────────────────────────────────
-  n8n-redis:
-    image: redis:7-alpine
-    container_name: n8n-redis
-    restart: unless-stopped
-    command: >
-      redis-server
-      --appendonly yes
-      --requirepass ${REDIS_PASSWORD}
-    environment:
-      TZ: ${TZ}
-    volumes:
-      - redis_data:/data
-    networks:
-      - n8n-net
-    healthcheck:
-      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-
-  # ──────────────────────────────────────────────────────────
-  # Traefik v3 — Reverse Proxy + SSL
-  # ──────────────────────────────────────────────────────────
-  n8n-traefik:
-    image: traefik:latest
-    container_name: n8n-traefik
-    restart: unless-stopped
-    command:
-      - "--api.dashboard=false"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.websecure.address=:443"
-      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
-      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
-      - "--certificatesresolvers.letsencrypt.acme.email=${EMAIL}"
-      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
-      - "--log.level=WARN"
-    environment:
-      TZ: ${TZ}
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - traefik_certs:/letsencrypt
-    networks:
-      - n8n-net
-    healthcheck:
-      test: ["CMD", "traefik", "healthcheck"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # ──────────────────────────────────────────────────────────
-  # Telegram Bot
-  # ──────────────────────────────────────────────────────────
-  n8n-bot:
-    build:
-      context: ./bot
-      dockerfile: Dockerfile
-    container_name: n8n-bot
-    restart: unless-stopped
-    environment:
-      TG_BOT_TOKEN: ${TG_BOT_TOKEN}
-      TG_USER_ID: ${TG_USER_ID}
-      N8N_DIR: /opt/websansay/n8n
-      DOMAIN: ${DOMAIN}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-      TZ: ${TZ}
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /opt/websansay/n8n:/opt/websansay/n8n:ro
-      - ./logs:/logs
-    networks:
-      - n8n-net
-    depends_on:
-      n8n:
-        condition: service_started
-
-networks:
-  n8n-net:
-    driver: bridge
-
-volumes:
-  n8n_data:
-  postgres_data:
-  redis_data:
-  traefik_certs:
-COMPOSEOF
-
-# Подставляем Docker GID
-echo "DOCKER_GID=${DOCKER_GID}" >> "$INSTALL_DIR/.env"
-
-log_ok "docker-compose.yml создан"
-
-# ============================================================
-# 8. TELEGRAM BOT
-# ============================================================
-log_step "8/11 · Создание Telegram бота"
-
-# bot/Dockerfile
-cat > "$INSTALL_DIR/bot/Dockerfile" << 'BDEOF'
-FROM node:20-alpine
-RUN apk add --no-cache docker-cli bash curl openssl
-WORKDIR /app
-COPY package.json ./
-RUN npm install --production
-COPY bot.js ./
-CMD ["node", "bot.js"]
-BDEOF
-
-# bot/package.json
-cat > "$INSTALL_DIR/bot/package.json" << 'BPEOF'
-{
-  "name": "n8n-telegram-bot",
-  "version": "4.0.0",
-  "main": "bot.js",
-  "scripts": { "start": "node bot.js" },
-  "dependencies": { "node-telegram-bot-api": "^0.66.0" }
-}
-BPEOF
-
-# bot/bot.js
-cat > "$INSTALL_DIR/bot/bot.js" << 'BJEOF'
-const TelegramBot = require('node-telegram-bot-api');
-const { exec } = require('child_process');
-const fs = require('fs');
-
-const BOT_TOKEN = process.env.TG_BOT_TOKEN;
-const AUTH_USER = process.env.TG_USER_ID;
-const N8N_DIR = process.env.N8N_DIR || '/opt/websansay/n8n';
-
-if (!BOT_TOKEN || !AUTH_USER) {
-    console.log('TG_BOT_TOKEN or TG_USER_ID not set. Bot disabled.');
-    process.exit(0);
-}
-
-const bot = new TelegramBot(BOT_TOKEN, { polling: true });
-const auth = (msg) => String(msg.from.id) === String(AUTH_USER);
-
-const run = (cmd, timeout = 60000) => new Promise((resolve, reject) => {
-    exec(cmd, { timeout, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
-        if (err) reject(err);
-        else resolve(stdout || stderr || 'OK');
-    });
-});
-
-// /start, /help
-bot.onText(/\/(start|help)/, (msg) => {
-    if (!auth(msg)) return;
-    bot.sendMessage(msg.chat.id, `*n8n Bot v4.0*\n
-/status — Статус сервера
-/logs [N] — Логи n8n (по умолчанию 50 строк)
-/update — Обновить n8n
-/backup — Создать бэкап
-/restart — Перезапустить n8n
-/disk — Дисковое пространство
-/urls — Адреса всех сервисов`, { parse_mode: 'Markdown' });
-});
-
-// /status
-bot.onText(/\/status/, async (msg) => {
-    if (!auth(msg)) return;
-    const cid = msg.chat.id;
-    try {
-        const [uptime, containers, disk, mem, ver] = await Promise.all([
-            run('uptime -p').catch(() => run('uptime')),
-            run('docker ps --format "{{.Names}}: {{.Status}}"'),
-            run("df -h / | tail -1 | awk '{print $5\" of \"$2}'"),
-            run("free -h | grep Mem | awk '{print $3\"/\"$2}'"),
-            run('docker exec n8n n8n --version 2>/dev/null').catch(() => 'N/A')
-        ]);
-        bot.sendMessage(cid, `📊 *Статус*\n\n⏱ ${uptime.trim()}\n💾 Диск: ${disk.trim()}\n🧠 RAM: ${mem.trim()}\n📦 n8n: v${ver.trim()}\n\n*Контейнеры:*\n\`\`\`\n${containers.trim()}\n\`\`\``, { parse_mode: 'Markdown' });
-    } catch (e) { bot.sendMessage(cid, `❌ ${e.message}`); }
-});
-
-// /logs
-bot.onText(/\/logs(?:\s+(\d+))?/, async (msg, match) => {
-    if (!auth(msg)) return;
-    const cid = msg.chat.id;
-    const lines = Math.min(parseInt(match[1]) || 50, 5000);
-    try {
-        const logs = await run(`docker logs n8n --tail ${lines} 2>&1`, 30000);
-        if (!logs.trim()) { bot.sendMessage(cid, '📋 Логи пусты'); return; }
-        if (logs.length > 3900) {
-            const p = `/tmp/n8n_logs_${Date.now()}.txt`;
-            fs.writeFileSync(p, logs);
-            await bot.sendDocument(cid, p, { caption: `📋 ${lines} строк логов` });
-            fs.unlinkSync(p);
-        } else {
-            bot.sendMessage(cid, `📋 *Логи:*\n\`\`\`\n${logs.substring(0, 3800)}\n\`\`\``, { parse_mode: 'Markdown' });
-        }
-    } catch (e) { bot.sendMessage(cid, `❌ ${e.message}`); }
-});
-
-// /restart
-bot.onText(/\/restart/, async (msg) => {
-    if (!auth(msg)) return;
-    const cid = msg.chat.id;
-    await bot.sendMessage(cid, '🔄 Перезапускаю n8n...');
-    try {
-        await run('docker restart n8n', 120000);
-        await new Promise(r => setTimeout(r, 15000));
-        const s = await run('docker ps --filter name=^n8n$ --format "{{.Status}}"');
-        bot.sendMessage(cid, `✅ Перезапущен\n${s.trim()}`);
-    } catch (e) { bot.sendMessage(cid, `❌ ${e.message}`); }
-});
-
-// /update
-bot.onText(/\/update/, async (msg) => {
-    if (!auth(msg)) return;
-    const cid = msg.chat.id;
-    try {
-        await bot.sendMessage(cid, '🔍 Проверяю версии...');
-        let cur = 'unknown', lat = 'unknown';
-        try { cur = (await run('docker exec n8n n8n --version')).trim(); } catch {}
-        try {
-            const r = JSON.parse(await run('curl -s https://api.github.com/repos/n8n-io/n8n/releases/latest'));
-            lat = (r.tag_name || '').replace('n8n@', '').replace('v', '') || 'unknown';
-        } catch {}
-        await bot.sendMessage(cid, `📦 Текущая: *${cur}*\n🆕 Последняя: *${lat}*`, { parse_mode: 'Markdown' });
-        if (cur === lat && cur !== 'unknown') { bot.sendMessage(cid, '✅ Уже последняя версия!'); return; }
-
-        await bot.sendMessage(cid, '💾 Бэкап...');
-        await run(`${N8N_DIR}/backup_n8n.sh`, 300000).catch(() => {});
-
-        await bot.sendMessage(cid, '⏹ Останавливаю...');
-        await run(`docker compose -f ${N8N_DIR}/docker-compose.yml stop n8n n8n-worker`, 60000);
-
-        await bot.sendMessage(cid, '🔨 Пересборка (5-10 мин)...');
-        await run(`docker compose -f ${N8N_DIR}/docker-compose.yml build --pull n8n`, 900000);
-
-        await bot.sendMessage(cid, '🚀 Запуск...');
-        await run(`docker compose -f ${N8N_DIR}/docker-compose.yml up -d n8n n8n-worker`, 120000);
-        await new Promise(r => setTimeout(r, 20000));
-
-        let nv = 'unknown';
-        try { nv = (await run('docker exec n8n n8n --version')).trim(); } catch {}
-        await run('docker image prune -f', 60000).catch(() => {});
-        const s = await run('docker ps --filter name=^n8n$ --format "{{.Status}}"').catch(() => '?');
-        bot.sendMessage(cid, `✅ *Обновлено!*\n\n📦 Было: ${cur}\n🆕 Стало: ${nv}\n📊 ${s.trim()}`, { parse_mode: 'Markdown' });
-    } catch (e) { bot.sendMessage(cid, `❌ ${e.message}\n\nВручную: \`cd ${N8N_DIR} && ./update_n8n.sh\``, { parse_mode: 'Markdown' }); }
-});
-
-// /backup
-bot.onText(/\/backup/, async (msg) => {
-    if (!auth(msg)) return;
-    const cid = msg.chat.id;
-    await bot.sendMessage(cid, '💾 Создаю бэкап...');
-    try {
-        await run(`${N8N_DIR}/backup_n8n.sh`, 300000);
-        const info = await run(`ls -lhrt ${N8N_DIR}/backups/n8n_backup_*.tar.gz* 2>/dev/null | tail -1`).catch(() => '');
-        bot.sendMessage(cid, `✅ Бэкап создан!\n${info.trim()}`);
-    } catch (e) { bot.sendMessage(cid, `❌ ${e.message}`); }
-});
-
-// /disk
-bot.onText(/\/disk/, async (msg) => {
-    if (!auth(msg)) return;
-    const cid = msg.chat.id;
-    try {
-        const [d, dd] = await Promise.all([run('df -h /'), run('docker system df').catch(() => 'N/A')]);
-        bot.sendMessage(cid, `💾 *Диск*\n\`\`\`\n${d.trim()}\n\`\`\`\n*Docker:*\n\`\`\`\n${dd.trim()}\n\`\`\``, { parse_mode: 'Markdown' });
-    } catch (e) { bot.sendMessage(cid, `❌ ${e.message}`); }
-});
-
-// /urls
-bot.onText(/\/urls/, (msg) => {
-    if (!auth(msg)) return;
-    const D = process.env.DOMAIN || '?';
-    bot.sendMessage(msg.chat.id, `🌐 *n8n:* https://${D}`, { parse_mode: 'Markdown' });
-});
-
-bot.on('polling_error', (e) => console.error('Poll:', e.code || e.message));
-process.on('SIGINT', () => { bot.stopPolling(); process.exit(0); });
-process.on('SIGTERM', () => { bot.stopPolling(); process.exit(0); });
-console.log(`🤖 Bot started | Auth: ${AUTH_USER}`);
-BJEOF
-
-log_ok "Telegram бот создан"
-
-# ============================================================
-# 10. УТИЛИТЫ (backup, update, restore)
-# ============================================================
-log_step "9/11 · Создание утилит"
-
-# ─── backup_n8n.sh ──────────────────────────────────────────
-cat > "$INSTALL_DIR/backup_n8n.sh" << 'BKEOF'
-#!/bin/bash
-set -e
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
-
-if [ -f .env ]; then set -a; source .env; set +a; fi
-
-BACKUP_DIR="$SCRIPT_DIR/backups"
-BACKUP_NAME="n8n_backup_$(date +%Y%m%d_%H%M%S)"
-BACKUP_PATH="$BACKUP_DIR/$BACKUP_NAME"
-RETENTION=${BACKUP_RETENTION_DAYS:-7}
-
-mkdir -p "$BACKUP_PATH"
-
-notify() {
-    [ -n "${TG_BOT_TOKEN:-}" ] && [ -n "${TG_USER_ID:-}" ] && \
-    curl -sf -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
-        -d "chat_id=${TG_USER_ID}" -d "text=$1" -d "parse_mode=Markdown" >/dev/null 2>&1 || true
-}
-
-echo "[$(date)] Бэкап PostgreSQL..."
-docker exec n8n-postgres pg_dump -U "${POSTGRES_USER:-n8n}" "${POSTGRES_DB:-n8n}" > "$BACKUP_PATH/database.sql"
-[ ! -s "$BACKUP_PATH/database.sql" ] && { echo "ERROR: пустой дамп"; rm -rf "$BACKUP_PATH"; exit 1; }
-
-echo "[$(date)] Бэкап конфигурации..."
-docker cp n8n:/home/node/.n8n "$BACKUP_PATH/n8n_data" 2>/dev/null || true
-
-echo "[$(date)] Копирование .env и docker-compose.yml..."
-cp -f .env "$BACKUP_PATH/.env" 2>/dev/null || true
-cp -f docker-compose.yml "$BACKUP_PATH/docker-compose.yml" 2>/dev/null || true
-
-# Версии
-{ echo "Date: $(date)"; docker exec n8n n8n --version 2>/dev/null || echo "n8n: N/A"; docker --version; } > "$BACKUP_PATH/versions.txt"
-
-echo "[$(date)] Архивирование..."
-cd "$BACKUP_DIR"
-tar -czf "${BACKUP_NAME}.tar.gz" "$BACKUP_NAME"
-
-if [ -n "${N8N_ENCRYPTION_KEY:-}" ] && command -v openssl &>/dev/null; then
-    openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 \
-        -in "${BACKUP_NAME}.tar.gz" -out "${BACKUP_NAME}.tar.gz.enc" \
-        -pass pass:"$N8N_ENCRYPTION_KEY"
-    rm "${BACKUP_NAME}.tar.gz"
-    FINAL="${BACKUP_NAME}.tar.gz.enc"
+section "1/5  Домен и SSL"
+echo "Создайте у регистратора A-запись домена (или поддомена) на IP этого сервера ДО установки — иначе Let's Encrypt не выдаст сертификат."
+ask DOMAIN "🌐 Домен для n8n (например n8n.example.com): "
+DOMAIN="${DOMAIN#http://}"; DOMAIN="${DOMAIN#https://}"; DOMAIN="${DOMAIN%%/*}"
+[ -n "$DOMAIN" ] || die "Домен обязателен (DOMAIN=…)"
+ask EMAIL "📧 Email для SSL-сертификата Let's Encrypt: "
+[[ "$EMAIL" =~ ^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$ ]] || die "Нужен корректный email (EMAIL=…)"
+SERVER_IP=$(curl -4 -fsS --max-time 5 https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')
+DOMAIN_IP=$(getent ahostsv4 "$DOMAIN" 2>/dev/null | awk 'NR==1{print $1}')
+if [ "$DOMAIN_IP" = "$SERVER_IP" ]; then ok "DNS: $DOMAIN → $SERVER_IP"
 else
-    FINAL="${BACKUP_NAME}.tar.gz"
+  warn "DNS: $DOMAIN → ${DOMAIN_IP:-нет записи}, а IP сервера $SERVER_IP. SSL не выпустится, пока запись не обновится (обычно 5–30 минут)."
+  confirm "Продолжить всё равно (сертификат выпустится сам, когда DNS обновится)?" || [ "${FORCE:-0}" = 1 ] || die "Исправьте A-запись и запустите снова (или FORCE=1)."
 fi
 
-rm -rf "$BACKUP_NAME"
-find "$BACKUP_DIR" -name "n8n_backup_*.tar.gz*" -mtime +$RETENTION -delete 2>/dev/null || true
+section "2/5  Секреты n8n"
+ask POSTGRES_PASSWORD  "🔐 Пароль Postgres (Enter — сгенерировать): "
+ask N8N_ENCRYPTION_KEY "🗝️  Ключ шифрования n8n (Enter — сгенерировать; при переносе со старого сервера — вставьте старый): "
+[ -n "$POSTGRES_PASSWORD" ]  || { POSTGRES_PASSWORD=$(openssl rand -hex 16); ok "Сгенерирован пароль Postgres"; }
+[ -n "$N8N_ENCRYPTION_KEY" ] || { N8N_ENCRYPTION_KEY=$(openssl rand -hex 32); ok "Сгенерирован ключ шифрования (сохранён в $INSTALL_DIR/.env — сделайте копию)"; }
 
-SIZE=$(du -h "$FINAL" | cut -f1)
-COUNT=$(find "$BACKUP_DIR" -name "n8n_backup_*.tar.gz*" 2>/dev/null | wc -l)
-echo "[$(date)] ✅ Бэкап: $FINAL ($SIZE) | Всего: $COUNT"
-notify "✅ Бэкап: \`$FINAL\` ($SIZE)"
-echo "$BACKUP_DIR/$FINAL"
-BKEOF
-chmod +x "$INSTALL_DIR/backup_n8n.sh"
-
-# ─── update_n8n.sh ──────────────────────────────────────────
-cat > "$INSTALL_DIR/update_n8n.sh" << 'UPEOF'
-#!/bin/bash
-set -e
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
-
-if [ -f .env ]; then set -a; source .env; set +a; fi
-LOG="$SCRIPT_DIR/logs/update_$(date +%Y%m%d_%H%M%S).log"
-mkdir -p "$SCRIPT_DIR/logs"
-exec > >(tee -a "$LOG") 2>&1
-
-notify() {
-    [ -n "${TG_BOT_TOKEN:-}" ] && [ -n "${TG_USER_ID:-}" ] && \
-    curl -sf -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
-        -d "chat_id=${TG_USER_ID}" -d "text=$1" -d "parse_mode=Markdown" >/dev/null 2>&1 || true
-}
-
-CUR=$(docker exec n8n n8n --version 2>/dev/null || echo "unknown")
-LAT=$(curl -sf https://api.github.com/repos/n8n-io/n8n/releases/latest | grep '"tag_name"' | sed -E 's/.*"n8n@([^"]+)".*/\1/' || echo "unknown")
-
-echo "Текущая: $CUR | Последняя: $LAT"
-
-if [ "$CUR" = "$LAT" ] && [ "$CUR" != "unknown" ]; then
-    echo "✅ Уже последняя версия"; notify "✅ n8n $CUR — последняя версия"; exit 0
+section "3/5  Админ-бот Telegram"
+cat <<'TGHELP'
+🤖 Бот сервера: уведомления, /status, /logs, /backups, /update и ночной бэкап воркфлоу.
+   • токен — у @BotFather: /newbot → скопируйте строку вида 123456789:AAH…
+   • ваш ID — напишите @userinfobot, он ответит числом (только этот ID сможет управлять ботом)
+TGHELP
+while :; do
+  ask TG_BOT_TOKEN "🤖 Telegram Bot Token: "
+  [[ "$TG_BOT_TOKEN" =~ ^[0-9]{5,}:[A-Za-z0-9_-]{30,}$ ]] && break
+  [ "$HAVE_TTY" = 1 ] || die "TG_BOT_TOKEN пуст или неверного вида (123456789:AAH…)"
+  echo "   ⚠️  Токен вида 123456789:AAH… — скопируйте целиком из @BotFather."; TG_BOT_TOKEN=""
+done
+if BOT_NAME=$(curl -fsS --max-time 10 "https://api.telegram.org/bot${TG_BOT_TOKEN}/getMe" 2>/dev/null | grep -o '"username":"[^"]*"' | cut -d'"' -f4) && [ -n "$BOT_NAME" ]; then
+  ok "Бот найден: @$BOT_NAME"
+else
+  warn "Не удалось проверить токен через api.telegram.org (неверный токен или Telegram недоступен с сервера)."
 fi
-
-notify "🔄 Обновление n8n: $CUR → $LAT"
-
-echo "Бэкап..."
-[ -f ./backup_n8n.sh ] && ./backup_n8n.sh || echo "⚠️  Бэкап не создан"
-
-echo "Остановка..."
-docker compose stop n8n n8n-worker
-
-echo "Пересборка..."
-docker compose build --pull --no-cache n8n
-
-echo "Запуск..."
-docker compose up -d n8n n8n-worker
-
-echo "Ожидание (60s max)..."
-for i in {1..30}; do
-    sleep 2
-    docker exec n8n wget --spider -q http://localhost:5678/healthz 2>/dev/null && break
+while :; do
+  ask TG_USER_ID "👤 Ваш Telegram User ID: "
+  [[ "$TG_USER_ID" =~ ^-?[0-9]{5,}$ ]] && break
+  [ "$HAVE_TTY" = 1 ] || die "TG_USER_ID пуст или не число"
+  echo "   ⚠️  ID — это число от @userinfobot."; TG_USER_ID=""
 done
 
-NEW=$(docker exec n8n n8n --version 2>/dev/null || echo "unknown")
-docker image prune -f >/dev/null 2>&1 || true
-docker builder prune -f >/dev/null 2>&1 || true
+section "4/5  Telegram Bot API: файлы до 2 ГБ"
+cat <<'APIHELP'
+📎 Зачем: обычный Bot API (api.telegram.org) даёт боту скачать файл максимум 20 МБ
+   и отправить — 50 МБ. Видео для монтажа больше. Свой сервер Bot API на этой машине
+   снимает лимит до 2 ГБ в обе стороны. Для него Telegram требует ключи ПРИЛОЖЕНИЯ
+   (не бота!) — api_id и api_hash.
 
-STATUS=$(docker ps --filter name=^n8n$ --format "{{.Status}}" 2>/dev/null)
-
-if echo "$STATUS" | grep -q "Up"; then
-    echo "✅ Обновлено: $CUR → $NEW"
-    notify "✅ n8n обновлён: $CUR → $NEW"
-else
-    echo "❌ Контейнер не запустился"
-    notify "❌ Ошибка обновления. Проверьте: docker logs n8n"
-    exit 1
-fi
-UPEOF
-chmod +x "$INSTALL_DIR/update_n8n.sh"
-
-# ─── restore_n8n.sh ─────────────────────────────────────────
-cat > "$INSTALL_DIR/restore_n8n.sh" << 'RSEOF'
-#!/bin/bash
-set -e
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
-
-if [ -f .env ]; then set -a; source .env; set +a; fi
-
-if [ -z "$1" ]; then
-    echo "Использование: $0 <путь_к_бэкапу>"
-    echo ""; echo "Доступные бэкапы:"
-    ls -lhrt "$SCRIPT_DIR/backups/n8n_backup_"* 2>/dev/null || echo "  Нет бэкапов"
-    exit 1
-fi
-
-BACKUP_FILE="$1"
-[ ! -f "$BACKUP_FILE" ] && { echo "❌ Файл не найден: $BACKUP_FILE"; exit 1; }
-
-echo "⚠️  ВСЕ текущие данные будут ЗАМЕНЕНЫ!"
-read -p "Продолжить? (yes/no): " CONFIRM
-[ "$CONFIRM" != "yes" ] && { echo "Отменено."; exit 0; }
-
-# Бэкап текущего состояния
-echo "💾 Бэкап текущего состояния..."
-./backup_n8n.sh 2>/dev/null || true
-
-echo "⏹  Остановка контейнеров..."
-docker compose down
-
-TMPDIR=$(mktemp -d)
-cd "$TMPDIR"
-
-# Расшифровка
-if [[ "$BACKUP_FILE" == *.enc ]]; then
-    [ -z "${N8N_ENCRYPTION_KEY:-}" ] && { echo "❌ N8N_ENCRYPTION_KEY не задан"; rm -rf "$TMPDIR"; exit 1; }
-    openssl enc -aes-256-cbc -d -salt -pbkdf2 -iter 100000 \
-        -in "$BACKUP_FILE" -out backup.tar.gz -pass pass:"$N8N_ENCRYPTION_KEY"
-    tar -xzf backup.tar.gz
-else
-    tar -xzf "$BACKUP_FILE"
-fi
-
-DATA_DIR=$(find . -maxdepth 1 -type d -name "n8n_backup_*" | head -1)
-[ -z "$DATA_DIR" ] && { echo "❌ Данные не найдены в архиве"; rm -rf "$TMPDIR"; exit 1; }
-
-# Восстановление PostgreSQL
-echo "🗄  PostgreSQL..."
-docker compose -f "$SCRIPT_DIR/docker-compose.yml" up -d n8n-postgres
-sleep 10
-if [ -f "$DATA_DIR/database.sql" ]; then
-    docker exec n8n-postgres psql -U "${POSTGRES_USER:-n8n}" -d postgres \
-        -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${POSTGRES_DB:-n8n}' AND pid<>pg_backend_pid();" 2>/dev/null || true
-    docker exec n8n-postgres dropdb -U "${POSTGRES_USER:-n8n}" "${POSTGRES_DB:-n8n}" 2>/dev/null || true
-    docker exec n8n-postgres createdb -U "${POSTGRES_USER:-n8n}" "${POSTGRES_DB:-n8n}"
-    docker exec -i n8n-postgres psql -U "${POSTGRES_USER:-n8n}" -d "${POSTGRES_DB:-n8n}" < "$DATA_DIR/database.sql"
-    echo "✅ БД восстановлена"
-fi
-
-# Восстановление конфигурации n8n
-if [ -d "$DATA_DIR/n8n_data" ]; then
-    echo "📁 Конфигурация n8n..."
-    docker volume rm -f "$(basename $SCRIPT_DIR)_n8n_data" 2>/dev/null || true
-    docker volume create "$(basename $SCRIPT_DIR)_n8n_data" 2>/dev/null || true
-    docker run --rm -v "$(basename $SCRIPT_DIR)_n8n_data":/restore -v "$PWD/$DATA_DIR/n8n_data":/backup alpine sh -c "cp -r /backup/. /restore/"
-    echo "✅ Конфигурация восстановлена"
-fi
-
-# .env
-if [ -f "$DATA_DIR/.env" ]; then
-    read -p "Восстановить .env? (yes/no): " RE
-    if [ "$RE" = "yes" ]; then
-        cp "$SCRIPT_DIR/.env" "$SCRIPT_DIR/.env.before_restore"
-        cp "$DATA_DIR/.env" "$SCRIPT_DIR/.env"
-        echo "✅ .env восстановлен (старый → .env.before_restore)"
-    fi
-fi
-
-rm -rf "$TMPDIR"
-
-echo "🚀 Запуск..."
-docker compose -f "$SCRIPT_DIR/docker-compose.yml" up -d
-sleep 15
-
-for i in {1..30}; do
-    docker exec n8n wget --spider -q http://localhost:5678/healthz 2>/dev/null && { echo "✅ n8n работает!"; break; }
-    sleep 2
+   Где взять (2 минуты, бесплатно):
+     1. https://my.telegram.org → войдите по номеру телефона (код придёт в сам Telegram).
+     2. Раздел «API development tools».
+     3. App title — любое (n8n-files), Short name — латиница 5–32 символа,
+        Platform — Other → «Create application».
+     4. Скопируйте App api_id (число) и App api_hash (32 символа).
+   Ключи привязаны к вашему аккаунту — никому их не передавайте.
+   Enter без ввода — пропустить (лимит останется 20 МБ; добавить позже: вписать в
+   /opt/n8n-install/.env и выполнить bash /opt/n8n-install/install-extras.sh).
+APIHELP
+while :; do
+  ask TELEGRAM_API_ID "🔑 App api_id: "
+  { [ -z "$TELEGRAM_API_ID" ] || [[ "$TELEGRAM_API_ID" =~ ^[0-9]+$ ]]; } && break
+  [ "$HAVE_TTY" = 1 ] || die "TELEGRAM_API_ID — только цифры"
+  echo "   ⚠️  api_id — это только цифры."; TELEGRAM_API_ID=""
 done
+if [ -n "$TELEGRAM_API_ID" ]; then
+  while :; do
+    ask TELEGRAM_API_HASH "🔑 App api_hash: "
+    [[ "$TELEGRAM_API_HASH" =~ ^[0-9a-fA-F]{32}$ ]] && break
+    [ "$HAVE_TTY" = 1 ] || die "TELEGRAM_API_HASH — 32 символа 0-9/a-f"
+    echo "   ⚠️  api_hash — 32 символа 0-9/a-f."; TELEGRAM_API_HASH=""
+  done
+  ok "Локальный Bot API будет установлен (до 2 ГБ)"
+else
+  TELEGRAM_API_HASH=""
+  warn "Локальный Bot API пропущен — лимит файлов 20 МБ."
+fi
 
-echo ""; echo "✅ Восстановление завершено!"
-echo "🔗 https://${DOMAIN:-n8n}"
-RSEOF
-chmod +x "$INSTALL_DIR/restore_n8n.sh"
+section "5/5  Сеть"
+echo "Прокси нужен, если с сервера закрыт доступ к OpenAI/Google/Telegram и т.п. Внутренние сервисы ходят мимо него."
+ask PROXY_URL "🌍 HTTP-прокси (http://user:pass@host:port, Enter — без прокси): "
 
-log_ok "Утилиты: backup_n8n.sh, update_n8n.sh, restore_n8n.sh"
+echo
+echo "────────── Итого ──────────"
+echo "  Домен:        https://$DOMAIN"
+echo "  Email SSL:    $EMAIL"
+echo "  Админ-бот:    ${BOT_NAME:+@$BOT_NAME }→ ID $TG_USER_ID"
+echo "  Bot API 2 ГБ: $([ -n "$TELEGRAM_API_ID" ] && echo да || echo нет)"
+echo "  Прокси:       ${PROXY_URL:-нет}"
+echo "  Ветка:        $REPO_BRANCH → $INSTALL_DIR"
+if [ "$HAVE_TTY" = 1 ] && [ "${FORCE:-0}" != 1 ]; then
+  confirm "Начать установку (10–15 минут)?" || die "Отменено."
+fi
 
-# ============================================================
-# 10. СБОРКА ОБРАЗОВ
-# ============================================================
-log_step "10/11 · Сборка Docker образов"
+### 2. Система: пакеты, swap, firewall, Docker
+section "Установка: система и Docker"
+export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
+mkdir -p /etc/apt/apt.conf.d /etc/needrestart/conf.d
+echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4
+printf '$nrconf{override_rc}->{qr(^ssh)} = 0;\n$nrconf{restart} = "a";\n' > /etc/needrestart/conf.d/no-restart-ssh.conf 2>/dev/null || true
+apt-get update -qq
+apt-get install -y -qq ca-certificates curl git jq openssl zip cron >/dev/null
+SWAP_MB=$(awk '/SwapTotal/{print int($2/1024)}' /proc/meminfo)
+if (( RAM_MB < 8000 && SWAP_MB < 1000 )) && [ ! -f /swapfile ]; then
+  fallocate -l 4G /swapfile && chmod 600 /swapfile && mkswap /swapfile >/dev/null && swapon /swapfile \
+    && echo '/swapfile none swap sw 0 0' >> /etc/fstab && ok "Создан swap 4 ГБ (RAM < 8 ГБ — для сборки образов и рендера)"
+fi
+if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
+  ufw allow 22/tcp >/dev/null; ufw allow 80/tcp >/dev/null; ufw allow 443/tcp >/dev/null; ok "ufw: открыты 22, 80 и 443"
+fi
+if ! command -v docker &>/dev/null; then
+  curl -fsSL https://get.docker.com | sh
+fi
+docker compose version &>/dev/null || apt-get install -y -qq docker-compose-plugin
+systemctl enable --now docker >/dev/null 2>&1 || true
+ok "Docker: $(docker --version | cut -d, -f1), compose: $(docker compose version --short)"
 
+### 3. Код проекта
+if [ -d "$INSTALL_DIR/.git" ]; then
+  echo "📥 $INSTALL_DIR уже есть — обновляю из git ($REPO_BRANCH)..."
+  git -C "$INSTALL_DIR" fetch --depth 1 origin "$REPO_BRANCH"
+  git -C "$INSTALL_DIR" checkout -q -B "$REPO_BRANCH" FETCH_HEAD
+else
+  echo "📥 Клонирую проект ($REPO_BRANCH)..."
+  if [ -d "$INSTALL_DIR" ] && [ -n "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]; then
+    mv "$INSTALL_DIR" "${INSTALL_DIR}.old.$(date +%s)"; warn "Старая папка без git перенесена в ${INSTALL_DIR}.old.*"
+  fi
+  git clone --depth 1 -b "$REPO_BRANCH" "$REPO_URL" "$INSTALL_DIR"
+fi
 cd "$INSTALL_DIR"
 
-log_info "Очистка Docker кэша..."
-docker builder prune -af 2>/dev/null || true
+### 4. .env (все секреты только здесь; существующий сохраняется и дополняется)
+if [ -f .env ]; then cp .env ".env.bak.$(date +%s)"; else cp .env.template .env; fi
+set_env() { # set_env KEY VALUE
+  local key="$1" val="$2"
+  if grep -q "^${key}=" .env; then
+    val="${val//\\/\\\\}"; val="${val//|/\\|}"; val="${val//&/\\&}"
+    sed -i "s|^${key}=.*|${key}=${val}|" .env
+  else
+    echo "${key}=${2}" >> .env
+  fi
+}
+set_env DOMAIN "$DOMAIN"
+set_env EMAIL "$EMAIL"
+set_env POSTGRES_PASSWORD "$POSTGRES_PASSWORD"
+set_env N8N_ENCRYPTION_KEY "$N8N_ENCRYPTION_KEY"
+set_env WEBHOOK_URL "https://${DOMAIN}/"
+set_env TG_BOT_TOKEN "$TG_BOT_TOKEN"
+set_env TG_USER_ID "$TG_USER_ID"
+set_env PROXY_URL "$PROXY_URL"
+set_env TELEGRAM_API_ID "$TELEGRAM_API_ID"
+set_env TELEGRAM_API_HASH "$TELEGRAM_API_HASH"
+set_env DOCKER_GID "$(getent group docker | cut -d: -f3 || echo 999)"
+printf 'TG_BOT_TOKEN=%s\nTG_USER_ID=%s\n' "$TG_BOT_TOKEN" "$TG_USER_ID" > bot/.env
+chmod 600 .env bot/.env
 
-log_info "Сборка n8n (может занять 5-15 минут)..."
-docker compose build --no-cache 2>&1 | tail -5
-
-log_ok "Все образы собраны"
-
-# ============================================================
-# 11. ЗАПУСК
-# ============================================================
-log_step "11/11 · Запуск контейнеров"
-
-docker compose up -d
-
-# Ожидание healthcheck n8n
-log_info "Ожидание запуска n8n (до 120 секунд)..."
-N8N_OK=false
-for i in {1..60}; do
-    sleep 2
-    if docker exec n8n wget --spider -q http://localhost:5678/healthz 2>/dev/null; then
-        N8N_OK=true
-        break
-    fi
-    echo -n "."
+### 5. Папки, права, шимы
+mkdir -p logs backups letsencrypt traefik_dynamic docker-plugins \
+  data/reels data/files
+touch logs/backup.log
+chown -R 1000:1000 logs backups
+chmod -R 755 logs backups
+chmod +x shims/* backup_n8n.sh update_n8n.sh install-extras.sh scripts/*.sh
+# docker-compose как cli-plugin для контейнера n8n-bot (он запускает update_n8n.sh у себя)
+for p in /usr/libexec/docker/cli-plugins/docker-compose /usr/lib/docker/cli-plugins/docker-compose /usr/local/lib/docker/cli-plugins/docker-compose; do
+  [ -f "$p" ] && cp -f "$p" docker-plugins/docker-compose && break
 done
-echo ""
 
-if $N8N_OK; then
-    log_ok "n8n запущен и отвечает!"
-else
-    log_warn "n8n не ответил за 120 секунд. Проверьте: docker compose logs n8n"
+### 6. Подготовка движков: секреты sandbox/searxng, NO_PROXY, движки монтажа, шрифты
+bash ./install-extras.sh --prepare-only
+
+### 7. Сборка и запуск ядра (готовый образ рендера качается параллельно)
+section "Сборка ядра + загрузка образа рендера (5–10 минут)"
+PULL_PID=""
+if [ "${MEDIA_RENDER_BUILD:-0}" != "1" ]; then
+  docker compose pull -q n8n-media-render >/dev/null 2>&1 &
+  PULL_PID=$!
 fi
+docker compose build n8n n8n-worker n8n-tools n8n-bot
+docker compose up -d n8n-postgres n8n-redis n8n-traefik n8n n8n-worker n8n-bot n8n-tools
+echo "⏳ Жду запуска n8n (до 2 минут)..."
+for i in $(seq 1 24); do
+  docker exec n8n-app wget -qO- http://localhost:5678/healthz 2>/dev/null | grep -q ok && { ok "n8n запущен"; break; }
+  sleep 5
+done
 
-# ============================================================
-# 12. CRON + ФИНАЛИЗАЦИЯ
-# ============================================================
-log_step "Финализация"
+### 8. Движки и сервисы (Bot API, whisper, edge-tts, рендер, поиск, sandbox) + полная проверка
+section "Движки и проверка"
+[ -n "$PULL_PID" ] && { echo "⏳ Дожидаюсь загрузки образа рендера..."; wait "$PULL_PID" || true; }
+CHECK_OK=1
+bash ./install-extras.sh || CHECK_OK=0
 
-# Cron для бэкапов
-(crontab -l 2>/dev/null | grep -v "backup_n8n.sh"; \
- echo "0 2 * * * cd $INSTALL_DIR && ./backup_n8n.sh >> ./logs/backup_cron.log 2>&1") | crontab - 2>/dev/null || true
-log_ok "Cron: ежедневный бэкап в 2:00"
+### 9. Бэкап по расписанию
+(crontab -l 2>/dev/null | grep -v backup_n8n.sh; echo "0 2 * * * /bin/bash $INSTALL_DIR/backup_n8n.sh >> $INSTALL_DIR/logs/backup.log 2>&1") | crontab -
+ok "Бэкап воркфлоу и кредов: ежедневно в 02:00 → Telegram"
 
-# Версия n8n
-N8N_VER=$(docker exec n8n n8n --version 2>/dev/null || echo "N/A")
+### 10. Итог
+SSL_OK=0
+for s in $(seq 1 6); do
+  curl -fsS --max-time 5 -o /dev/null "https://$DOMAIN/healthz" 2>/dev/null && { SSL_OK=1; break; }
+  sleep 5
+done
+STATUS="$([ $CHECK_OK = 1 ] && echo '🟢 все проверки пройдены' || echo '🟡 есть замечания — см. журнал')"
+curl -s -X POST "https://api.telegram.org/bot$TG_BOT_TOKEN/sendMessage" -d chat_id="$TG_USER_ID" \
+  --data-urlencode text="✅ n8n установлен: https://$DOMAIN
+$STATUS
+SSL: $([ $SSL_OK = 1 ] && echo ok || echo 'ещё выпускается (проверьте DNS)')" >/dev/null || true
 
-# Уведомление в Telegram
-if [ -n "$TG_BOT_TOKEN" ] && [ -n "$TG_USER_ID" ]; then
-    curl -sf -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
-        -d "chat_id=${TG_USER_ID}" \
-        -d "text=✅ *n8n установлен!*
+echo
+docker ps --format "table {{.Names}}\t{{.Status}}"
+cat <<EOF
 
-🌐 https://${DOMAIN}
-📦 Версия: ${N8N_VER}
-
-Команды: /start" \
-        -d "parse_mode=Markdown" >/dev/null 2>&1 || true
-fi
-
-# ============================================================
-# ИТОГОВЫЙ ВЫВОД
-# ============================================================
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo -e "${GREEN}${BOLD}  ✅ УСТАНОВКА ЗАВЕРШЕНА!${NC}"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-echo -e "  ${BOLD}🌐 n8n:${NC}  ${CYAN}https://${DOMAIN}${NC}"
-echo ""
-echo -e "  ${BOLD}📦 Версии:${NC}"
-echo -e "     n8n:              v${N8N_VER}"
-echo -e "     PostgreSQL:       16"
-echo -e "     Redis:            7"
-echo -e "     Traefik:          latest"
-echo ""
-echo -e "  ${BOLD}📝 Команды:${NC}"
-echo "     cd $INSTALL_DIR"
-echo "     docker compose ps           # Статус"
-echo "     docker compose logs -f n8n  # Логи"
-echo "     ./update_n8n.sh             # Обновить"
-echo "     ./backup_n8n.sh             # Бэкап"
-echo "     ./restore_n8n.sh <файл>     # Восстановить"
-echo ""
-echo -e "  ${BOLD}📁 Все пароли сохранены в:${NC} ${INSTALL_DIR}/.env"
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-
-# Статус контейнеров
-docker compose ps
+╔══════════════════════════════════════════════════════════════╗
+  🎉 Установка завершена — $STATUS
+  🌐 n8n:          https://$DOMAIN   (SSL: $([ $SSL_OK = 1 ] && echo готов || echo 'выпускается, подождите 1–5 минут после обновления DNS'))
+  👤 Первый вход:  откройте адрес и создайте аккаунт владельца
+  📎 Telegram в n8n: в кредах Telegram укажите Base URL  http://telegram-bot-api-proxy
+  🔤 Шрифты:       /opt/fonts (каталог /opt/fonts/fonts.json)
+  🗝️  Секреты:      $INSTALL_DIR/.env — сохраните N8N_ENCRYPTION_KEY в надёжном месте
+  🩺 Проверка:     bash $INSTALL_DIR/install-extras.sh --check
+  📜 Журнал:       $LOG_FILE
+╚══════════════════════════════════════════════════════════════╝
+EOF
+[ $CHECK_OK = 1 ] || exit 3

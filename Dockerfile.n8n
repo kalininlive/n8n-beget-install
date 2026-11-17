@@ -1,0 +1,12 @@
+FROM n8nio/n8n:latest
+
+USER root
+
+# Оставляем ТОЛЬКО пакеты для работы с файлами/путями, чтобы не ломать Code ноды.
+# Убираем все сетевые пакеты (axios и др.) и все пакеты ffmpeg (ffmpeg-static, fluent-ffmpeg).
+RUN npm install -g fs-extra path
+
+# Устанавливаем oauth-1.0a, так как он был у вас раньше. Вероятно, нужен для какой-то старой аутентификации.
+RUN npm install oauth-1.0a
+
+USER node

@@ -1,0 +1,83 @@
+# Сборка, проверка и публикация готового образа n8n-media-render в GHCR.
+# Установщик скачивает его вместо сборки на сервере (экономит 15–25 минут и не зависит от сети сервера).
+name: media-render image
+
+on:
+  push:
+    branches: [stack-v2]
+    paths:
+      - Dockerfile.render
+      - fonts/fonts.list
+      - scripts/install-fonts.sh
+      - .dockerignore
+      - .github/workflows/media-render.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/n8n-media-render
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.render
+          platforms: linux/amd64
+          load: true
+          tags: ${{ env.IMAGE }}:test
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.description=n8n-media-render: Remotion, HyperFrames, Playwright, GSAP, three.js, ffmpeg, fonts
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test
+        run: |
+          docker run --rm ${{ env.IMAGE }}:test bash -lc '
+            set -e
+            echo "remotion:    $(remotion --version 2>/dev/null | tail -n1)"
+            echo "hyperframes: $(hyperframes --version 2>&1 | tail -n1)"
+            echo "playwright:  $(playwright --version)"
+            ffmpeg -version | head -n1
+            test -x "$HYPERFRAMES_BROWSER_PATH" && "$HYPERFRAMES_BROWSER_PATH" --headless --no-sandbox --dump-dom "data:text/html,<p>hf-ok</p>" | grep -q hf-ok && echo "hf browser: OK"
+            node --no-deprecation -e "const t=require(\"three\");require(\"gsap\");console.log(\"three r\"+t.REVISION+\", gsap OK\")"
+            test -f /opt/engines/vendor/gsap/gsap.min.js && test -f /opt/engines/vendor/three/build/three.module.js
+            echo "fonts: $(fc-list | grep -c /opt/fonts/) faces, $(grep -o "\"family\"" /opt/fonts/fonts.json | wc -l) families"
+            fc-match "Unbounded:weight=900" | grep -qi unbounded && fc-match "Golos Text" | grep -qi golos
+            cat > /tmp/t.html <<HTML
+          <!doctype html><meta charset="utf-8"><body style="margin:0;width:800px;height:400px;background:#111;color:#fff;font:900 72px Unbounded">Привет, рендер</body>
+          HTML
+            playwright screenshot --viewport-size=800,400 file:///tmp/t.html /tmp/node.png >/dev/null && test -s /tmp/node.png
+            python3 -c "
+          from playwright.sync_api import sync_playwright
+          with sync_playwright() as p:
+              b = p.chromium.launch(); pg = b.new_page(); pg.set_content(\"<h1>ok</h1>\"); print(\"python playwright:\", pg.inner_text(\"h1\")); b.close()"
+            echo "ALL OK"
+          '
+          docker image ls ${{ env.IMAGE }}:test --format 'size: {{.Size}}'
+
+      - name: Push
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          for t in stack-v2 sha-${GITHUB_SHA::7}; do
+            docker tag ${{ env.IMAGE }}:test ${{ env.IMAGE }}:$t
+            docker push -q ${{ env.IMAGE }}:$t
+          done

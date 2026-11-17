@@ -1,0 +1,77 @@
+# Коллекция шрифтов сборки: кириллица + латиница, свободные лицензии (OFL / Apache / UFL).
+# Источник — репозиторий github.com/google/fonts (тот же, что у Google Fonts).
+# Формат: <путь в google/fonts>  <категория>   (# — комментарий)
+# Добавить шрифт: дописать строку и запустить  bash scripts/install-fonts.sh
+# Вариативные шрифты ([wght]) содержат ВСЕ начертания от тонкого до сверхжирного в одном файле.
+
+# --- Гротески (основной текст, субтитры, интерфейсы) ---
+ofl/inter                 sans
+ofl/roboto                sans
+ofl/robotocondensed       sans
+ofl/montserrat            sans
+ofl/manrope               sans
+ofl/rubik                 sans
+ofl/golostext             sans
+ofl/onest                 sans
+ofl/opensans              sans
+ofl/notosans              sans
+ofl/ptsans                sans
+ofl/ptsansnarrow          sans
+ofl/raleway               sans
+ofl/nunito                sans
+ofl/mulish                sans
+ofl/jost                  sans
+ofl/commissioner          sans
+ofl/exo2                  sans
+ofl/firasans              sans
+ofl/firasanscondensed     sans
+ofl/ibmplexsans           sans
+ofl/oswald                sans
+ofl/sofiasanscondensed    sans
+ufl/ubuntu                sans
+
+# --- Акцидентные (заголовки, обложки, хуки в роликах) ---
+ofl/unbounded             display
+ofl/russoone              display
+ofl/delagothicone         display
+ofl/rubikmonoone          display
+ofl/tektur                display
+ofl/comfortaa             display
+ofl/oi                    display
+ofl/seymourone            display
+ofl/kellyslab             display
+ofl/yesevaone             display
+ofl/pressstart2p          display
+ofl/rubikglitch           display
+
+# --- Рукописные ---
+ofl/caveat                handwriting
+ofl/lobster               handwriting
+ofl/pacifico              handwriting
+ofl/amaticsc              handwriting
+ofl/neucha                handwriting
+ofl/marckscript           handwriting
+ofl/badscript             handwriting
+ofl/philosopher           handwriting
+
+# --- С засечками (редакционный, газетный стиль) ---
+ofl/playfairdisplay       serif
+ofl/lora                  serif
+ofl/merriweather          serif
+ofl/ptserif               serif
+ofl/notoserif             serif
+ofl/ebgaramond            serif
+ofl/cormorant             serif
+ofl/prata                 serif
+ofl/spectral              serif
+ofl/literata              serif
+ofl/oldstandardtt         serif
+ofl/alice                 serif
+
+# --- Моноширинные (код, терминал, HUD) ---
+ofl/jetbrainsmono         mono
+ofl/firacode              mono
+ofl/robotomono            mono
+ofl/ibmplexmono           mono
+ofl/ptmono                mono
+ofl/sourcecodepro         mono
