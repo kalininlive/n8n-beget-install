@@ -1,0 +1,3 @@
+#!/bin/sh
+# Node со скриптами Playwright: pw-node /data/files/script.js  (require("playwright") работает)
+exec docker exec -i n8n-media-render node "$@"

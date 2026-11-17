@@ -1,0 +1,3 @@
+#!/bin/sh
+# Playwright CLI (Node) в n8n-media-render: playwright screenshot https://example.com /data/files/shot.png
+exec docker exec -i n8n-media-render playwright "$@"

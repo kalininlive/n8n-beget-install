@@ -1,0 +1,183 @@
+volumes:
+  sandbox-tls: null
+  telegram-bot-data:
+    driver: local
+  whisper-models:
+    driver: local
+services:
+  n8n-traefik:
+    extra_hosts:
+    - host.docker.internal:host-gateway
+  n8n:
+    volumes:
+      - telegram-bot-data:/data/telegram-files
+      - telegram-bot-data:/var/lib/telegram-bot-api:ro
+      # коллекция шрифтов (scripts/install-fonts.sh): /opt/fonts/fonts.json, fonts.css, google/, custom/
+      - /opt/n8n-install/fonts:/opt/fonts:ro
+  n8n-worker:
+    volumes:
+      - telegram-bot-data:/data/telegram-files
+      - telegram-bot-data:/var/lib/telegram-bot-api:ro
+      - /opt/n8n-install/fonts:/opt/fonts:ro
+  n8n-tools:
+    volumes:
+      - /opt/n8n-install/fonts:/opt/fonts:ro
+      - /opt/n8n-install/fonts:/usr/share/fonts/n8n:ro   # fontconfig → ffmpeg drawtext/libass видят шрифты по имени
+  telegram-bot-api:
+    image: aiogram/telegram-bot-api:latest
+    container_name: telegram-bot-api
+    restart: unless-stopped
+    environment:
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
+      TELEGRAM_LOCAL: "true"
+      TELEGRAM_STAT: "true"
+    volumes:
+      - telegram-bot-data:/var/lib/telegram-bot-api
+      # отправка файлов с диска до 2 ГБ: в n8n file = "file:///data/…" (по URL лимит 20 МБ и у локального сервера)
+      - /opt/n8n-install/data:/data:ro
+    ports:
+      - "127.0.0.1:8081:8081"
+  telegram-bot-api-proxy:
+    # nginx: API → telegram-bot-api:8081, файлы (/file/bot…) — с диска. Base URL кредов Telegram в n8n.
+    image: nginx:1.27-alpine
+    container_name: telegram-bot-api-proxy
+    restart: unless-stopped
+    depends_on:
+      - telegram-bot-api
+    volumes:
+      - telegram-bot-data:/var/lib/telegram-bot-api:ro
+      - ./telegram-bot-api/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+  n8n-media-render:
+    # готовый образ с GitHub (install скачивает его); при недоступности — собирается локально из Dockerfile.render
+    image: ${MEDIA_RENDER_IMAGE:-ghcr.io/kalininlive/n8n-media-render:stack-v2}
+    build:
+      context: .
+      dockerfile: Dockerfile.render
+    container_name: n8n-media-render
+    restart: always
+    volumes:
+    - /opt/n8n-install/data:/data
+    - /opt/n8n-install/fonts:/opt/fonts:ro   # поверх копии из образа (+ ваши fonts/custom); fontconfig смотрит в /opt/fonts
+    environment:
+    - HTTP_PROXY=${PROXY_URL}
+    - HTTPS_PROXY=${PROXY_URL}
+    - NO_PROXY=${NO_PROXY}
+    - HYPERFRAMES_NO_UPDATE_CHECK=1
+  sandbox-certs:
+    image: ghcr.io/n8n-io/n8n-sandbox-service-api:1.2.0
+    container_name: sandbox-certs
+    user: 0:0
+    entrypoint:
+    - sh
+    - -c
+    command:
+    - 'bootstrap-mtls.sh --out-dir /tls --api-san sandbox-api --control-san-prefix
+      sandbox-runner --world-readable && chown -R sandbox-api:sandbox-api /tls/api
+      && chmod -R a+rX /tls
+
+      '
+    environment:
+      NUM_RUNNERS: '1'
+    volumes:
+    - sandbox-tls:/tls
+  sandbox-api:
+    image: ghcr.io/n8n-io/n8n-sandbox-service-api:1.2.0
+    container_name: sandbox-api
+    restart: unless-stopped
+    depends_on:
+      sandbox-certs:
+        condition: service_completed_successfully
+    env_file: .env
+    environment:
+      SANDBOX_API_GRPC_TLS_CERT_FILE: /tls/api/grpc-server.crt
+      SANDBOX_API_GRPC_TLS_KEY_FILE: /tls/api/grpc-server.key
+      SANDBOX_API_GRPC_TLS_CLIENT_CA_FILE: /tls/api/ca.crt
+      SANDBOX_API_RUNNER_CONTROL_GRPC_TLS_CA_FILE: /tls/api/ca.crt
+      SANDBOX_API_RUNNER_CONTROL_GRPC_TLS_CERT_FILE: /tls/api/control-grpc-api-client.crt
+      SANDBOX_API_RUNNER_CONTROL_GRPC_TLS_KEY_FILE: /tls/api/control-grpc-api-client.key
+      SANDBOX_API_RUNNER_CONTROL_GRPC_TLS_SERVER_NAME: sandbox-runner-1
+    volumes:
+    - sandbox-tls:/tls:ro
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -qO-
+      - http://localhost:8080/healthz
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+  sandbox-runner-1:
+    image: ghcr.io/n8n-io/n8n-sandbox-service-runner-dind:1.2.0
+    container_name: sandbox-runner-1
+    privileged: true
+    restart: unless-stopped
+    depends_on:
+      sandbox-api:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      SANDBOX_RUNNER_API_GRPC_ADDR: sandbox-api:9090
+      SANDBOX_RUNNER_HTTP_BASE_URL: http://sandbox-runner-1:8080
+      SANDBOX_RUNNER_CONTROL_GRPC_LISTEN_ADDR: :9091
+      SANDBOX_RUNNER_CONTROL_GRPC_ADVERTISE_ADDR: sandbox-runner-1:9091
+      SANDBOX_RUNNER_ID: runner-1
+      SANDBOX_RUNNER_DOCKER_SANDBOX_IMAGE: ghcr.io/n8n-io/n8n-sandbox-service-sandbox:latest
+      SANDBOX_RUNNER_REGISTRATION_GRPC_CA_FILE: /tls/runner/ca.crt
+      SANDBOX_RUNNER_REGISTRATION_GRPC_CERT_FILE: /tls/runner/grpc-client.crt
+      SANDBOX_RUNNER_REGISTRATION_GRPC_KEY_FILE: /tls/runner/grpc-client.key
+      SANDBOX_RUNNER_REGISTRATION_GRPC_SERVER_NAME: sandbox-api
+      SANDBOX_RUNNER_CONTROL_GRPC_TLS_CERT_FILE: /tls/runner/control-grpc-server.crt
+      SANDBOX_RUNNER_CONTROL_GRPC_TLS_KEY_FILE: /tls/runner/control-grpc-server.key
+      SANDBOX_RUNNER_CONTROL_GRPC_TLS_CLIENT_CA_FILE: /tls/runner/ca.crt
+    volumes:
+    - sandbox-tls:/tls:ro
+  searxng:
+    image: ghcr.io/searxng/searxng:latest
+    container_name: searxng
+    restart: unless-stopped
+    environment:
+      SEARXNG_SECRET: ${SEARXNG_SECRET}
+    volumes:
+    - ./searxng-settings.yml:/etc/searxng/settings.yml:ro
+  edge-tts:
+    image: travisvn/openai-edge-tts:latest
+    container_name: edge-tts
+    restart: unless-stopped
+    environment:
+      PORT: 5050
+      REQUIRE_API_KEY: 'false'
+      DEFAULT_VOICE: ru-RU-DmitryNeural
+      DEFAULT_RESPONSE_FORMAT: mp3
+      DEFAULT_SPEED: '1.0'
+      EXPAND_API: 'true'
+    volumes:
+    - /opt/n8n-install/data:/data
+    - /opt/n8n-install/edge-tts-custom/server.py:/app/server.py:ro
+    - /opt/n8n-install/edge-tts-custom/tts_handler.py:/app/tts_handler.py:ro
+  faster-whisper:
+    # Распознавание речи (faster-whisper) с OpenAI-совместимым API: POST /v1/audio/transcriptions.
+    # Для n8n: http://faster-whisper:8000 или шим `whisper <файл в /data>`. Модель качается в том whisper-models.
+    image: ghcr.io/speaches-ai/speaches:${WHISPER_IMAGE_TAG:-0.8.3-cpu}
+    container_name: faster-whisper
+    restart: unless-stopped
+    group_add:
+      - '101'   # группа telegram-bot-api: чтение файлов Bot API (папки 750)
+    mem_limit: ${WHISPER_MEM_LIMIT:-3g}
+    environment:
+      WHISPER_MODEL: ${WHISPER_MODEL:-Systran/faster-whisper-small}
+      WHISPER__COMPUTE_TYPE: int8
+      WHISPER__CPU_THREADS: ${WHISPER_CPU_THREADS:-4}
+      WHISPER__TTL: ${WHISPER_TTL:-600}
+      ENABLE_UI: 'false'
+      LOG_LEVEL: info
+      HTTP_PROXY: ${PROXY_URL}
+      HTTPS_PROXY: ${PROXY_URL}
+      NO_PROXY: ${NO_PROXY}
+    volumes:
+    - whisper-models:/home/ubuntu/.cache/huggingface/hub
+    - /opt/n8n-install/data:/data:ro
+    # файлы локального Telegram Bot API: whisper читает голосовые/видео прямо по file_path из getFile
+    - telegram-bot-data:/var/lib/telegram-bot-api:ro
