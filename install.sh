@@ -61,6 +61,12 @@ echo "Журнал установки: $LOG_FILE"
 
 ### 0. Проверка сервера
 section "0/5  Проверка сервера"
+if pgrep -f unattended-upgrade >/dev/null 2>&1; then
+  warn "На сервере выполняется первичное фоновое обновление Ubuntu (unattended-upgrades)..."
+  echo "   Жду завершения, чтобы пакетный менеджер не блокировался и службы не перезапускались..."
+  while pgrep -f unattended-upgrade >/dev/null 2>&1; do sleep 5; done
+  ok "Фоновое обновление системы завершено"
+fi
 . /etc/os-release 2>/dev/null || die "Не удалось определить ОС"
 case "${ID:-}:${VERSION_ID:-}" in
   ubuntu:24.04) ok "Ubuntu 24.04 LTS — рекомендуемая версия" ;;
@@ -201,8 +207,10 @@ fi
 ### 2. Система: пакеты, swap, firewall, Docker
 section "Установка: система и Docker"
 export DEBIAN_FRONTEND=noninteractive
-mkdir -p /etc/apt/apt.conf.d
+export NEEDRESTART_MODE=a
+mkdir -p /etc/apt/apt.conf.d /etc/needrestart/conf.d
 echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4
+printf '$nrconf{override_rc}->{qr(^ssh)} = 0;\n$nrconf{restart} = "a";\n' > /etc/needrestart/conf.d/no-restart-ssh.conf 2>/dev/null || true
 apt-get update -qq
 apt-get install -y -qq ca-certificates curl git jq openssl zip cron >/dev/null
 SWAP_MB=$(awk '/SwapTotal/{print int($2/1024)}' /proc/meminfo)
@@ -211,7 +219,7 @@ if (( RAM_MB < 8000 && SWAP_MB < 1000 )) && [ ! -f /swapfile ]; then
     && echo '/swapfile none swap sw 0 0' >> /etc/fstab && ok "Создан swap 4 ГБ (RAM < 8 ГБ — для сборки образов и рендера)"
 fi
 if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
-  ufw allow 80/tcp >/dev/null; ufw allow 443/tcp >/dev/null; ok "ufw: открыты 80 и 443"
+  ufw allow 22/tcp >/dev/null; ufw allow 80/tcp >/dev/null; ufw allow 443/tcp >/dev/null; ok "ufw: открыты 22, 80 и 443"
 fi
 if ! command -v docker &>/dev/null; then
   curl -fsSL https://get.docker.com | sh
