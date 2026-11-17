@@ -115,6 +115,8 @@ start_services() {
   docker compose up -d sandbox-certs
   docker wait sandbox-certs >/dev/null 2>&1 || true
   docker compose up -d sandbox-api sandbox-runner-1 searxng edge-tts faster-whisper n8n-tools
+  # обновляем edge-tts в контейнере до актуальной версии (защита от устаревания Sec-MS-GEC токенов и 403 ошибки)
+  docker exec edge-tts pip install --quiet --upgrade edge-tts >/dev/null 2>&1 && docker restart edge-tts >/dev/null 2>&1 || true
   # локальный Bot API — только с API_ID/HASH (у клиента свои с my.telegram.org), иначе контейнер крутится в перезапусках
   if grep -q '^TELEGRAM_API_ID=.' .env && grep -q '^TELEGRAM_API_HASH=.' .env; then
     docker compose up -d telegram-bot-api telegram-bot-api-proxy
