@@ -23,3 +23,4 @@
 - Сборка очищена от индивидуальной настройки: движки монтажа (kraft-reel, montage-v2, audio-prep), библиотека компонентов HyperFrames, проект маскота (studio-engine), воркфлоу, набор `beget/` и всё, что относится к конкретному боту. Стили роликов, шаблоны и воркфлоу каждый ставит под себя.
 - Готовый образ `ghcr.io/kalininlive/n8n-media-render:stack-v2` (GitHub Actions: сборка + smoke-тест + публикация); шрифты и браузер HyperFrames запечены; установщик качает образ параллельно со сборкой ядра, без доступа — собирает локально. Установка 10–15 минут вместо 15–30.
 - Убран рендер каруселей html-render (puppeteer-core, шим `render-html`): тестовый рендер HTML → PNG в `--check` теперь через Playwright.
+- Подготовка к n8n v3: поддержка unverified community-нод (`N8N_UNVERIFIED_PACKAGES_ENABLED=true`) и фиксация лимитов распаковки архивов на 2 ГБ / 5000 файлов (`N8N_COMPRESSION_NODE_*`).
