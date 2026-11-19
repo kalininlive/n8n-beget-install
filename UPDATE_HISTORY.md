@@ -23,4 +23,3 @@
 - Сборка очищена от индивидуальной настройки: движки монтажа (kraft-reel, montage-v2, audio-prep), библиотека компонентов HyperFrames, проект маскота (studio-engine), воркфлоу, набор `beget/` и всё, что относится к конкретному боту. Стили роликов, шаблоны и воркфлоу каждый ставит под себя.
 - Готовый образ `ghcr.io/kalininlive/n8n-media-render:stack-v2` (GitHub Actions: сборка + smoke-тест + публикация); шрифты и браузер HyperFrames запечены; установщик качает образ параллельно со сборкой ядра, без доступа — собирает локально. Установка 10–15 минут вместо 15–30.
 - Убран рендер каруселей html-render (puppeteer-core, шим `render-html`): тестовый рендер HTML → PNG в `--check` теперь через Playwright.
-[2026-11-19] Updated to 2.48.6 and updated Community Nodes
