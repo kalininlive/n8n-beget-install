@@ -304,7 +304,7 @@ CHECK_OK=1
 bash ./install-extras.sh || CHECK_OK=0
 
 ### 9. Бэкап по расписанию
-(crontab -l 2>/dev/null | grep -v backup_n8n.sh; echo "0 2 * * * /bin/bash $INSTALL_DIR/backup_n8n.sh >> $INSTALL_DIR/logs/backup.log 2>&1") | crontab -
+{ crontab -l 2>/dev/null | grep -v backup_n8n.sh || true; echo "0 2 * * * /bin/bash $INSTALL_DIR/backup_n8n.sh >> $INSTALL_DIR/logs/backup.log 2>&1"; } | crontab -
 ok "Бэкап воркфлоу и кредов: ежедневно в 02:00 → Telegram"
 
 ### 10. Итог
